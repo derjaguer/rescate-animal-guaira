@@ -2,884 +2,566 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Plus, Users, Map as MapIcon, Image as ImageIcon, CheckCircle, AlertTriangle, 
   RefreshCw, Shield, MapPin, X, Navigation, UserPlus, Phone, Activity, Heart,
-  Search, ShieldAlert, CheckCircle2, AlertOctagon, HelpCircle, Eye, Compass
+  Search, ShieldAlert, CheckCircle2, AlertOctagon, HelpCircle, Eye, Compass,
+  Layers, Filter, Edit3, Trash2, Camera, Check, Clock, AlertCircle
 } from 'lucide-react';
 
-const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'rescate-animal-guaira';
-
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, collection, doc, setDoc, onSnapshot, updateDoc, deleteDoc } from 'firebase/firestore';
-
-let app, auth, db;
-if (firebaseConfig) {
-  app = initializeApp(firebaseConfig);
-  auth = getAuth(app);
-  db = getFirestore(app);
-}
-
-const ZONE_COLORS = {
-  'Pendiente': { bg: 'bg-red-500', text: 'text-red-700', border: 'border-red-500', hex: '#ef4444', badge: 'bg-red-100 text-red-800 border-red-300' }, 
-  'En progreso': { bg: 'bg-yellow-500', text: 'text-yellow-700', border: 'border-yellow-500', hex: '#eab308', badge: 'bg-yellow-100 text-yellow-800 border-yellow-300' }, 
-  'Limpia': { bg: 'bg-green-500', text: 'text-green-700', border: 'border-green-500', hex: '#22c55e', badge: 'bg-green-100 text-green-800 border-green-300' }, 
-  'Alerta - Fuga': { bg: 'bg-orange-500', text: 'text-orange-700', border: 'border-orange-500', hex: '#f97316', badge: 'bg-orange-100 text-orange-800 border-orange-300' },
-  'Sin asignar': { bg: 'bg-gray-200', text: 'text-gray-600', border: 'border-gray-400', hex: '#9ca3af', badge: 'bg-gray-100 text-gray-700 border-gray-300' }
+// Default Firebase Credentials for "rescate-animal-guaira"
+const DEFAULT_FIREBASE_CONFIG = {
+  apiKey: "AIzaSyBhA87FvcrpLbmRSbWOHz8QqT7lk_Vcz_o",
+  authDomain: "rescate-animal-guaira.firebaseapp.com",
+  projectId: "rescate-animal-guaira",
+  storageBucket: "rescate-animal-guaira.firebasestorage.app",
+  messagingSenderId: "1038458912009",
+  appId: "1:1038458912009:web:6cef5f2cb769ad394067d8",
+  measurementId: "G-CKYT5N8CX7"
 };
 
-const ANIMAL_STATUSES = [
-  "Avistado",
-  "Buscando",
-  "Capturado",
-  "Libre en la zona",
-  "Fallecido en la zona"
-];
-
 const PRESET_LA_GUAIRA_SECTORS = [
-  { name: 'Catia La Mar - Cuadrícula A1', bounds: { swLat: 10.595, swLng: -67.045, neLat: 10.615, neLng: -67.015 }, center: [10.605, -67.030] },
-  { name: 'Urb. Playa Grande - Cuadrícula A2', bounds: { swLat: 10.600, swLng: -67.015, neLat: 10.620, neLng: -66.985 }, center: [10.610, -67.000] },
-  { name: 'Maiquetía Centro - Cuadrícula B1', bounds: { swLat: 10.585, swLng: -66.970, neLat: 10.605, neLng: -66.940 }, center: [10.595, -66.955] },
-  { name: 'La Guaira Puerto - Cuadrícula B2', bounds: { swLat: 10.590, swLng: -66.940, neLat: 10.610, neLng: -66.910 }, center: [10.600, -66.925] },
-  { name: 'Macuto Sector Este - Cuadrícula C1', bounds: { swLat: 10.600, swLng: -66.910, neLat: 10.620, neLng: -66.870 }, center: [10.610, -66.890] },
-  { name: 'Caraballeda - Cuadrícula C2', bounds: { swLat: 10.605, swLng: -66.870, neLat: 10.625, neLng: -66.830 }, center: [10.615, -66.850] },
-  { name: 'Naiguatá Centro - Cuadrícula D1', bounds: { swLat: 10.605, swLng: -66.760, neLat: 10.625, neLng: -66.720 }, center: [10.615, -66.740] },
-  { name: 'Carayaca - Cuadrícula O1', bounds: { swLat: 10.530, swLng: -67.140, neLat: 10.560, neLng: -67.090 }, center: [10.545, -67.115] }
+  { id: 'catia_la_mar', name: 'Cuadrícula A1 - Catia La Mar', swLat: 10.575, swLng: -67.050, neLat: 10.610, neLng: -67.000 },
+  { id: 'maiquetia', name: 'Cuadrícula A2 - Maiquetía', swLat: 10.585, swLng: -67.000, neLat: 10.615, neLng: -66.950 },
+  { id: 'la_guaira_puerto', name: 'Cuadrícula B1 - La Guaira Centro / Puerto', swLat: 10.590, swLng: -66.950, neLat: 10.620, neLng: -66.910 },
+  { id: 'macuto', name: 'Cuadrícula B2 - Macuto', swLat: 10.595, swLng: -66.910, neLat: 10.625, neLng: -66.860 },
+  { id: 'caraballeda', name: 'Cuadrícula C1 - Caraballeda', swLat: 10.600, swLng: -66.860, neLat: 10.630, neLng: -66.810 },
+  { id: 'naiguata', name: 'Cuadrícula C2 - Naiguatá', swLat: 10.605, swLng: -66.810, neLat: 10.635, neLng: -66.730 },
+  { id: 'carayaca', name: 'Cuadrícula D1 - Carayaca', swLat: 10.520, swLng: -67.180, neLat: 10.580, neLng: -67.080 }
 ];
 
-const generateId = () => Math.random().toString(36).substr(2, 9);
+const getSectorStatusInfo = (status) => {
+  switch (status) {
+    case 'limpia': 
+      return { bg: 'bg-emerald-500', badge: 'bg-emerald-100 text-emerald-800 border-emerald-300', hex: '#10b981', label: 'Limpia / Libre' };
+    case 'en_progreso': 
+      return { bg: 'bg-amber-500', badge: 'bg-amber-100 text-amber-800 border-amber-300', hex: '#f59e0b', label: 'En Progreso' };
+    case 'pendiente': 
+      return { bg: 'bg-rose-500', badge: 'bg-rose-100 text-rose-800 border-rose-300', hex: '#ef4444', label: 'Pendiente por Revisar' };
+    case 'alerta_fuga': 
+      return { bg: 'bg-orange-500', badge: 'bg-orange-100 text-orange-800 border-orange-300', hex: '#f97316', label: 'Alerta - Posible Fuga' };
+    case 'sin_asignar': default: 
+      return { bg: 'bg-slate-300', badge: 'bg-slate-100 text-slate-700 border-slate-300', hex: '#94a3b8', label: 'Sin Asignar' };
+  }
+};
 
-function AdminPanel({ 
-  isCreatingZone, 
-  setIsCreatingZone, 
-  selectedPreset, 
-  handleSelectPreset, 
-  newZoneName, 
-  setNewZoneName, 
-  customLat, 
-  setCustomLat, 
-  customLng, 
-  setCustomLng, 
-  newZoneDesc, 
-  setNewZoneDesc, 
-  saveZone 
-}) {
-  return (
-    <div className="bg-white p-5 rounded-2xl shadow-sm mb-6 border-l-4 border-blue-600">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-2">
-        <div>
-          <h3 className="font-extrabold text-lg flex items-center text-blue-900 gap-2">
-            <Shield className="w-5 h-5 text-blue-600" /> Panel de Control de Coordinación
-          </h3>
-          <p className="text-xs text-gray-500">Crea zonas geográficas y coordina cuadrículas del mapa.</p>
-        </div>
-        <button 
-          onClick={() => setIsCreatingZone(!isCreatingZone)}
-          className="px-4 py-2.5 rounded-xl text-white font-bold bg-blue-600 hover:bg-blue-700 transition-all flex items-center gap-2 shadow-sm text-sm"
-        >
-          {isCreatingZone ? <><X className="w-4 h-4"/> Cancelar</> : <><Plus className="w-4 h-4"/> Delimitar Nueva Zona / Sector</>}
-        </button>
-      </div>
+const getAnimalStatusBadge = (status) => {
+  switch (status) {
+    case 'Capturado': 
+      return { bg: 'bg-emerald-100 text-emerald-800 border-emerald-300', icon: CheckCircle2 };
+    case 'Buscando': 
+      return { bg: 'bg-amber-100 text-amber-800 border-amber-300', icon: Search };
+    case 'Avistado': 
+      return { bg: 'bg-blue-100 text-blue-800 border-blue-300', icon: Eye };
+    case 'Libre en la zona': 
+      return { bg: 'bg-purple-100 text-purple-800 border-purple-300', icon: Compass };
+    case 'Fallecido en la zona': 
+      return { bg: 'bg-stone-200 text-stone-800 border-stone-400', icon: AlertOctagon };
+    default: 
+      return { bg: 'bg-gray-100 text-gray-800 border-gray-300', icon: HelpCircle };
+  }
+};
 
-      {isCreatingZone && (
-        <form onSubmit={saveZone} className="bg-slate-50 p-5 rounded-xl border border-slate-200 mt-4 space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider mb-1 text-gray-700">Seleccionar Sector Predeterminado de La Guaira</label>
-              <select 
-                value={selectedPreset} 
-                onChange={handleSelectPreset}
-                className="w-full border p-2.5 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none"
-              >
-                <option value="">-- Escoger del mapa de La Guaira --</option>
-                {PRESET_LA_GUAIRA_SECTORS.map(s => <option key={s.name} value={s.name}>{s.name}</option>)}
-              </select>
-            </div>
+const INITIAL_GROUPS = [
+  { id: 'grp-1', name: 'Equipo Canino Macuto', leader: 'Dr. Carlos Mendoza', phone: '+58 412-5551234', color: '#3b82f6' },
+  { id: 'grp-2', name: 'Brigada Felina Maiquetía', leader: 'Elena Ramos', phone: '+58 414-9988776', color: '#8b5cf6' },
+  { id: 'grp-3', name: 'Rescate de Emergencia Catia La Mar', leader: 'Marcos Silva', phone: '+58 416-3332211', color: '#ec4899' }
+];
 
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider mb-1 text-gray-700">Nombre Personalizado del Sector / Cuadrícula</label>
-              <input 
-                type="text" 
-                placeholder="Ej. Sector Macuto - Zona Norte A2" 
-                value={newZoneName}
-                onChange={(e) => setNewZoneName(e.target.value)}
-                className="w-full border p-2.5 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none"
-                required
-              />
-            </div>
-          </div>
+const INITIAL_VOLUNTEERS = [
+  { id: 'vol-1', name: 'Dr. Carlos Mendoza', role: 'Veterinario Principal', phone: '+58 412-5551234', groupId: 'grp-1', sectorId: 'macuto' },
+  { id: 'vol-2', name: 'Sofía Guerrero', role: 'Rescatista de Campo', phone: '+58 412-1112233', groupId: 'grp-1', sectorId: 'macuto' },
+  { id: 'vol-3', name: 'Elena Ramos', role: 'Coordinadora Felinos', phone: '+58 414-9988776', groupId: 'grp-2', sectorId: 'maiquetia' },
+  { id: 'vol-4', name: 'Marcos Silva', role: 'Logística y Transporte', phone: '+58 416-3332211', groupId: 'grp-3', sectorId: 'catia_la_mar' }
+];
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider mb-1 text-gray-700">Coordenada Latitud Centro</label>
-              <input type="number" step="any" value={customLat} onChange={(e) => setCustomLat(e.target.value)} className="w-full border p-2 rounded-lg text-sm" required />
-            </div>
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider mb-1 text-gray-700">Coordenada Longitud Centro</label>
-              <input type="number" step="any" value={customLng} onChange={(e) => setCustomLng(e.target.value)} className="w-full border p-2 rounded-lg text-sm" required />
-            </div>
-          </div>
+const INITIAL_SECTORS = PRESET_LA_GUAIRA_SECTORS.map((s, idx) => ({
+  ...s,
+  status: idx === 0 ? 'en_progreso' : idx === 3 ? 'limpia' : idx === 2 ? 'alerta_fuga' : 'pendiente',
+  assignedGroupId: idx === 0 ? 'grp-3' : idx === 3 ? 'grp-1' : idx === 1 ? 'grp-2' : '',
+  notes: idx === 2 ? 'Atención: Se reportó que un mestizo marrón cruzó desde Macuto a esta cuadrícula.' : 'Zona delimitada tras el evento sísmico.'
+}));
 
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider mb-1 text-gray-700">Notas de Referencia Geográfica / Límites</label>
-            <input 
-              type="text" 
-              placeholder="Ej. Limita con la avenida Soublette y el río Piedras" 
-              value={newZoneDesc}
-              onChange={(e) => setNewZoneDesc(e.target.value)}
-              className="w-full border p-2.5 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none"
-            />
-          </div>
-
-          <button type="submit" className="bg-green-600 hover:bg-green-700 text-white px-6 py-2.5 rounded-lg font-bold text-sm transition-colors shadow">
-            Guardar y Trazar en Mapa
-          </button>
-        </form>
-      )}
-    </div>
-  );
-}
-
-function ReportModal({ selectedZone, userLocation, setShowReportForm, submitReport }) {
-  return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
-        <div className="bg-blue-600 p-4 text-white flex justify-between items-center shrink-0">
-          <h2 className="text-lg font-black flex items-center gap-2">
-            <AlertTriangle className="w-5 h-5 text-yellow-300"/> Registrar Animal / Avistamiento
-          </h2>
-          <button onClick={() => setShowReportForm(false)} className="hover:bg-blue-700 p-1 rounded-full transition-colors">
-            <X className="w-6 h-6" />
-          </button>
-        </div>
-        
-        <div className="p-5 overflow-y-auto space-y-4">
-          <div className="bg-blue-50 p-3 rounded-xl border border-blue-100 text-xs font-semibold text-blue-900 flex items-start gap-2">
-            <MapPin className="w-5 h-5 text-blue-600 shrink-0" />
-            <div>
-              <p>Sector Asignado: <strong className="text-sm block">{selectedZone?.name || 'Sector La Guaira'}</strong></p>
-              {userLocation && <p className="text-green-700 font-bold mt-1">✓ Ubicación GPS Adjuntada</p>}
-            </div>
-          </div>
-          
-          <form onSubmit={submitReport} className="space-y-4">
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider mb-1 text-gray-700">Especie / Descripción del Animal</label>
-              <input name="animalType" type="text" required className="w-full border-2 border-gray-200 rounded-lg p-2.5 focus:border-blue-500 outline-none text-sm" placeholder="Ej. Perro Mestizo Marrón, Gato Herido, etc." />
-            </div>
-            
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider mb-1 text-gray-700">Estado del Rescate / Avistamiento</label>
-              <select name="status" className="w-full border-2 border-gray-200 rounded-lg p-2.5 focus:border-blue-500 outline-none text-sm bg-white" required>
-                <option value="">-- Seleccionar estado --</option>
-                {ANIMAL_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider mb-1 text-gray-700">Detalles de Salud / Comportamiento / Fuga</label>
-              <textarea name="description" className="w-full border-2 border-gray-200 rounded-lg p-2.5 focus:border-blue-500 outline-none text-sm resize-none" rows="3" placeholder="Anota si el animal huyó hacia otra cuadrícula, está herido o requiere atención médica urgente..."></textarea>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider mb-1 text-gray-700">URL de Fotografía de Evidencia</label>
-              <input name="imageUrl" type="url" className="w-full border-2 border-gray-200 rounded-lg p-2.5 focus:border-blue-500 outline-none text-sm" placeholder="https://ejemplo.com/foto.jpg" />
-            </div>
-
-            <button type="submit" className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold text-base hover:bg-blue-700 transition-colors shadow-md">
-              Guardar Reporte en Bitácora
-            </button>
-          </form>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function VolunteerModal({ setShowVolunteerModal, addVolunteer, groups }) {
-  return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-        <div className="bg-blue-800 p-4 text-white flex justify-between items-center">
-          <h2 className="text-base font-black flex items-center gap-2">
-            <UserPlus className="w-5 h-5"/> Registrar Nuevo Voluntario
-          </h2>
-          <button onClick={() => setShowVolunteerModal(false)}><X className="w-6 h-6" /></button>
-        </div>
-        <form onSubmit={addVolunteer} className="p-5 space-y-4">
-          <div>
-            <label className="block text-xs font-bold uppercase mb-1 text-gray-700">Nombre Completo</label>
-            <input name="volName" type="text" required className="w-full border p-2.5 rounded-lg text-sm" placeholder="Ej. Ana María Pérez" />
-          </div>
-          <div>
-            <label className="block text-xs font-bold uppercase mb-1 text-gray-700">Teléfono / WhatsApp</label>
-            <input name="volPhone" type="text" className="w-full border p-2.5 rounded-lg text-sm" placeholder="Ej. 0414-1234567" />
-          </div>
-          <div>
-            <label className="block text-xs font-bold uppercase mb-1 text-gray-700">Rol / Especialidad</label>
-            <select name="volRole" className="w-full border p-2.5 rounded-lg text-sm bg-white" required>
-              <option value="Rescatista de Campo">Rescatista de Campo</option>
-              <option value="Médico Veterinario">Médico Veterinario</option>
-              <option value="Logística y Transporte">Logística y Transporte</option>
-              <option value="Coordinación">Coordinación</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-bold uppercase mb-1 text-gray-700">Asignar a Grupo</label>
-            <select name="volGroup" className="w-full border p-2.5 rounded-lg text-sm bg-white">
-              <option value="">-- Sin Grupo Por Ahora --</option>
-              {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-            </select>
-          </div>
-          <button type="submit" className="w-full py-3 bg-blue-700 text-white rounded-xl font-bold">
-            Registrar Voluntario
-          </button>
-        </form>
-      </div>
-    </div>
-  );
-}
+const INITIAL_ANIMALS = [
+  {
+    id: 'anim-1',
+    name: 'Mestizo Marrón (Manchas)',
+    species: 'Perro',
+    status: 'Capturado',
+    sectorId: 'macuto',
+    groupId: 'grp-1',
+    reporterName: 'Sofía Guerrero',
+    date: '2026-07-28 10:30',
+    lat: 10.602,
+    lng: -66.885,
+    photoUrl: 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=400',
+    details: 'Mestizo de tamaño mediano, deshidratado pero fuera de peligro. En custodia del refugio temporal.'
+  },
+  {
+    id: 'anim-2',
+    name: 'Gata Calicó con collar',
+    species: 'Gato',
+    status: 'Buscando',
+    sectorId: 'maiquetia',
+    groupId: 'grp-2',
+    reporterName: 'Elena Ramos',
+    date: '2026-07-28 11:15',
+    lat: 10.600,
+    lng: -66.975,
+    photoUrl: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=400',
+    details: 'Vista en ruinas cerca de la plaza. Asustada, se esconde bajo los escombros.'
+  },
+  {
+    id: 'anim-3',
+    name: 'Perro Poodle Blanco',
+    species: 'Perro',
+    status: 'Avistado',
+    sectorId: 'la_guaira_puerto',
+    groupId: 'grp-1',
+    reporterName: 'Vecino del sector',
+    date: '2026-07-28 12:40',
+    lat: 10.605,
+    lng: -66.932,
+    photoUrl: 'https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?w=400',
+    details: 'Visto cruzando la avenida principal hacia la zona B1.'
+  }
+];
 
 export default function App() {
-  const [user, setUser] = useState(null);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [view, setView] = useState('map'); // 'map', 'zones', 'groups', 'volunteers', 'reports'
+  const [isAdmin, setIsAdmin] = useState(true);
+  const [activeTab, setActiveTab] = useState('mapa'); // 'mapa', 'zonas', 'grupos', 'voluntarios', 'galeria'
   
-  // Dynamic Data States
-  const [zones, setZones] = useState([]);
-  const [groups, setGroups] = useState([]);
-  const [volunteers, setVolunteers] = useState([]);
-  const [reports, setReports] = useState([]);
+  // Data States
+  const [sectors, setSectors] = useState(INITIAL_SECTORS);
+  const [groups, setGroups] = useState(INITIAL_GROUPS);
+  const [volunteers, setVolunteers] = useState(INITIAL_VOLUNTEERS);
+  const [animals, setAnimals] = useState(INITIAL_ANIMALS);
+
+  // Modals & UI States
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [showVolunteerModal, setShowVolunteerModal] = useState(false);
+  const [showGroupModal, setShowGroupModal] = useState(false);
+  const [showSectorModal, setShowSectorModal] = useState(false);
+  const [selectedSectorForReport, setSelectedSectorForReport] = useState(null);
   
-  // UI & Selection States
-  const [isCreatingZone, setIsCreatingZone] = useState(false);
-  const [selectedPreset, setSelectedPreset] = useState('');
-  const [newZoneName, setNewZoneName] = useState('');
-  const [newZoneDesc, setNewZoneDesc] = useState('');
-  const [customLat, setCustomLat] = useState('10.600');
-  const [customLng, setCustomLng] = useState('-66.930');
-  
-  const [selectedZone, setSelectedZone] = useState(null);
-  const [showReportForm, setShowReportForm] = useState(false);
-  
-  // GPS State
+  // Leaflet map reference & script status
+  const mapContainerRef = useRef(null);
+  const mapInstanceRef = useRef(null);
+  const [leafletLoaded, setLeafletLoaded] = useState(false);
   const [userLocation, setUserLocation] = useState(null);
   const [isLocating, setIsLocating] = useState(false);
 
-  // Volunteer Modal State
-  const [showVolunteerModal, setShowVolunteerModal] = useState(false);
-
-  // Leaflet Load State
-  const [leafletReady, setLeafletReady] = useState(false);
-  const mapContainerRef = useRef(null);
-  const mapInstanceRef = useRef(null);
-  const layersGroupRef = useRef(null);
-
   useEffect(() => {
-    if (!document.getElementById('leaflet-css')) {
-      const link = document.createElement('link');
-      link.id = 'leaflet-css';
-      link.rel = 'stylesheet';
-      link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-      document.head.appendChild(link);
+    // Check if Leaflet CSS & JS are already injected
+    if (window.L) {
+      setLeafletLoaded(true);
+      return;
     }
 
-    if (!window.L) {
-      const script = document.createElement('script');
-      script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-      script.async = true;
-      script.onload = () => setLeafletReady(true);
-      document.body.appendChild(script);
-    } else {
-      setLeafletReady(true);
-    }
+    const leafletCss = document.createElement('link');
+    leafletCss.rel = 'stylesheet';
+    leafletCss.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    document.head.appendChild(leafletCss);
+
+    const leafletJs = document.createElement('script');
+    leafletJs.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    leafletJs.onload = () => setLeafletLoaded(true);
+    document.head.appendChild(leafletJs);
   }, []);
 
   useEffect(() => {
-    if (!auth) return;
+    if (!leafletLoaded || activeTab !== 'mapa') return;
 
-    const initAuth = async () => {
-      try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
-        } else {
-          await signInAnonymously(auth);
-        }
-      } catch (error) {
-        console.error("Auth error:", error);
-      }
-    };
-    initAuth();
+    // Wait for container element
+    const container = document.getElementById('leaflet-map-canvas');
+    if (!container) return;
 
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-    });
+    if (mapInstanceRef.current) {
+      mapInstanceRef.current.remove();
+      mapInstanceRef.current = null;
+    }
 
-    return () => unsubscribe();
-  }, []);
+    try {
+      const L = window.L;
+      // Center map on La Guaira state
+      const map = L.map('leaflet-map-canvas').setView([10.595, -66.930], 12);
+      mapInstanceRef.current = map;
 
-  useEffect(() => {
-    if (!user || !db) return;
-
-    const zonesRef = collection(db, 'artifacts', appId, 'public', 'data', 'zones');
-    const groupsRef = collection(db, 'artifacts', appId, 'public', 'data', 'groups');
-    const volunteersRef = collection(db, 'artifacts', appId, 'public', 'data', 'volunteers');
-    const reportsRef = collection(db, 'artifacts', appId, 'public', 'data', 'reports');
-
-    const unsubZones = onSnapshot(zonesRef, (snapshot) => {
-      const z = [];
-      snapshot.forEach((doc) => z.push({ id: doc.id, ...doc.data() }));
-      setZones(z);
-    }, (err) => console.error(err));
-
-    const unsubGroups = onSnapshot(groupsRef, (snapshot) => {
-      const g = [];
-      snapshot.forEach((doc) => g.push({ id: doc.id, ...doc.data() }));
-      setGroups(g);
-    }, (err) => console.error(err));
-
-    const unsubVolunteers = onSnapshot(volunteersRef, (snapshot) => {
-      const v = [];
-      snapshot.forEach((doc) => v.push({ id: doc.id, ...doc.data() }));
-      setVolunteers(v);
-    }, (err) => console.error(err));
-
-    const unsubReports = onSnapshot(reportsRef, (snapshot) => {
-      const r = [];
-      snapshot.forEach((doc) => r.push({ id: doc.id, ...doc.data() }));
-      r.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-      setReports(r);
-    }, (err) => console.error(err));
-
-    return () => {
-      unsubZones();
-      unsubGroups();
-      unsubVolunteers();
-      unsubReports();
-    };
-  }, [user]);
-
-  useEffect(() => {
-    if (view !== 'map' || !leafletReady || !mapContainerRef.current) return;
-
-    const L = window.L;
-    if (!L) return;
-
-    // Reset or initialize Leaflet map if DOM container changed
-    let map = mapInstanceRef.current;
-    if (!map || map._container !== mapContainerRef.current) {
-      if (map) {
-        map.remove();
-      }
-      map = L.map(mapContainerRef.current).setView([10.600, -66.932], 12);
-      
+      // Add OpenStreetMap base tile layer
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; OpenStreetMap contributors | Rescate La Guaira'
       }).addTo(map);
 
-      layersGroupRef.current = L.layerGroup().addTo(map);
-      mapInstanceRef.current = map;
-    }
+      // Render sector grid rectangles on map
+      sectors.forEach((sec) => {
+        const info = getSectorStatusInfo(sec.status);
+        const bounds = [[sec.swLat, sec.swLng], [sec.neLat, sec.neLng]];
 
-    const layersGroup = layersGroupRef.current;
-    layersGroup.clearLayers();
-
-    // Render Preset and Custom Grids
-    zones.forEach(zone => {
-      const colorHex = ZONE_COLORS[zone.status]?.hex || '#9ca3af';
-      
-      let layer = null;
-      let leafletBounds = null;
-
-      if (zone.bounds) {
-        if (zone.bounds.swLat !== undefined && zone.bounds.swLng !== undefined && zone.bounds.neLat !== undefined && zone.bounds.neLng !== undefined) {
-          leafletBounds = [[zone.bounds.swLat, zone.bounds.swLng], [zone.bounds.neLat, zone.bounds.neLng]];
-        } else if (Array.isArray(zone.bounds) && zone.bounds.length === 4) {
-          leafletBounds = [[zone.bounds[0], zone.bounds[1]], [zone.bounds[2], zone.bounds[3]]];
-        } else if (Array.isArray(zone.bounds) && Array.isArray(zone.bounds[0])) {
-          leafletBounds = zone.bounds;
-        }
-      }
-
-      if (leafletBounds) {
-        layer = L.rectangle(leafletBounds, {
-          color: colorHex,
+        const rect = L.rectangle(bounds, {
+          color: info.hex,
           weight: 3,
-          fillColor: colorHex,
-          fillOpacity: 0.35
-        });
-      } else if (zone.center && Array.isArray(zone.center) && zone.center.length === 2) {
-        layer = L.circle(zone.center, {
-          radius: 800,
-          color: colorHex,
-          weight: 3,
-          fillColor: colorHex,
-          fillOpacity: 0.35
-        });
-      }
+          fillColor: info.hex,
+          fillOpacity: 0.25
+        }).addTo(map);
 
-      if (layer) {
-        const assignedGroup = groups.find(g => g.id === zone.assignedGroup);
-        const groupName = assignedGroup ? assignedGroup.name : 'Sin Asignar';
-        const zoneReportsCount = reports.filter(r => r.zoneId === zone.id).length;
+        const assignedGrp = groups.find(g => g.id === sec.assignedGroupId);
 
-        const popupContent = `
+        rect.bindPopup(`
           <div style="font-family: sans-serif; padding: 4px;">
-            <h3 style="font-weight: bold; font-size: 16px; margin: 0 0 6px 0; color: #1e293b;">${zone.name}</h3>
-            <div style="margin-bottom: 6px;">
-              <span style="background: ${colorHex}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold;">
-                ${zone.status}
-              </span>
-            </div>
-            <p style="font-size: 12px; color: #475569; margin: 4px 0;"><strong>Equipo:</strong> ${groupName}</p>
-            <p style="font-size: 12px; color: #475569; margin: 4px 0;"><strong>Animales Reportados:</strong> ${zoneReportsCount}</p>
-            ${zone.description ? `<p style="font-size: 11px; color: #64748b; margin: 4px 0;"><em>${zone.description}</em></p>` : ''}
+            <strong style="font-size: 14px; color: #1e293b;">${sec.name}</strong><br/>
+            <span style="display: inline-block; margin-top: 4px; padding: 2px 6px; border-radius: 4px; background: ${info.hex}; color: white; font-size: 11px; font-weight: bold;">
+              ${info.label}
+            </span>
+            <p style="margin: 6px 0; font-size: 12px; color: #475569;">
+              <strong>Equipo:</strong> ${assignedGrp ? assignedGrp.name : 'Sin asignar'}
+            </p>
+            <p style="margin: 4px 0; font-size: 11px; color: #64748b;">${sec.notes || ''}</p>
           </div>
-        `;
+        `);
+      });
 
-        layer.bindPopup(popupContent);
-        layer.on('click', () => {
-          setSelectedZone(zone);
-        });
-        layersGroup.addLayer(layer);
-      }
-    });
+      // Render animal pin markers on map
+      animals.forEach((anim) => {
+        const badge = getAnimalStatusBadge(anim.status);
+        const marker = L.circleMarker([anim.lat, anim.lng], {
+          radius: 8,
+          fillColor: anim.status === 'Capturado' ? '#10b981' : anim.status === 'Buscando' ? '#f59e0b' : '#3b82f6',
+          color: '#ffffff',
+          weight: 2,
+          fillOpacity: 0.9
+        }).addTo(map);
 
-    // Render Animal Report Markers
-    reports.forEach(report => {
-      if (report.lat && report.lng) {
-        const animalMarker = L.marker([report.lat, report.lng], {
-          title: `${report.animalType} - ${report.status}`
-        });
-
-        const reportPopup = `
+        marker.bindPopup(`
           <div style="font-family: sans-serif; max-width: 200px;">
-            <strong style="font-size: 14px; color: #0f172a;">${report.animalType}</strong><br/>
-            <span style="font-size: 11px; color: #2563eb; font-weight: bold;">[${report.status}]</span><br/>
-            <p style="font-size: 12px; margin: 4px 0;">${report.description || 'Sin notas'}</p>
-            ${report.imageUrl ? `<img src="${report.imageUrl}" style="width: 100%; height: 100px; object-fit: cover; border-radius: 6px; margin-top: 4px;" />` : ''}
+            ${anim.photoUrl ? `<img src="${anim.photoUrl}" style="width:100%; height:100px; object-fit:cover; border-radius:6px; margin-bottom:6px;" />` : ''}
+            <strong style="font-size: 13px; color: #0f172a;">${anim.name} (${anim.species})</strong><br/>
+            <span style="font-size: 11px; color: #0284c7; font-weight: 600;">Estatus: ${anim.status}</span>
+            <p style="font-size: 11px; color: #334155; margin: 4px 0;">${anim.details}</p>
+            <small style="color: #94a3b8; font-size: 10px;">Reportado por: ${anim.reporterName}</small>
           </div>
-        `;
-        animalMarker.bindPopup(reportPopup);
-        layersGroup.addLayer(animalMarker);
-      }
-    });
+        `);
+      });
 
-    // Render User Location GPS Marker
-    if (userLocation) {
-      const userMarker = L.circleMarker([userLocation.lat, userLocation.lng], {
-        radius: 9,
-        color: '#2563eb',
-        fillColor: '#60a5fa',
-        fillOpacity: 0.9
-      }).bindPopup('<b>Tu ubicación GPS actual</b>').openPopup();
-      layersGroup.addLayer(userMarker);
-      map.setView([userLocation.lat, userLocation.lng], 14);
+      // Add user location marker if requested
+      if (userLocation) {
+        L.marker([userLocation.lat, userLocation.lng])
+          .addTo(map)
+          .bindPopup('<b>📍 Tu Ubicación Actual (GPS)</b>')
+          .openPopup();
+        map.setView([userLocation.lat, userLocation.lng], 14);
+      }
+
+    } catch (err) {
+      console.error("Error initializing Leaflet map:", err);
     }
 
-  }, [view, leafletReady, zones, groups, reports, userLocation]);
+    return () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+    };
+  }, [leafletLoaded, activeTab, sectors, animals, groups, userLocation]);
 
-  const locateUser = () => {
+  const handleGetLocation = () => {
     if (!navigator.geolocation) {
-      alert("Tu navegador no soporta geolocalización.");
+      alert("Tu navegador no soporta geolocalización GPS.");
       return;
     }
     setIsLocating(true);
     navigator.geolocation.getCurrentPosition(
-      (position) => {
+      (pos) => {
         setUserLocation({
-          lat: position.coords.latitude,
-          lng: position.coords.longitude
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude
         });
         setIsLocating(false);
       },
-      (error) => {
-        console.error(error);
-        alert("No se pudo obtener la ubicación GPS. Verifica los permisos.");
+      (err) => {
+        console.error("Error obteniendo GPS:", err);
+        alert("No se pudo obtener la ubicación GPS. Verifica los permisos de tu dispositivo.");
         setIsLocating(false);
       },
       { enableHighAccuracy: true }
     );
   };
 
-  const totalZones = zones.length;
-  const pendingZones = zones.filter(z => z.status === 'Pendiente').length;
-  const inProgressZones = zones.filter(z => z.status === 'En progreso').length;
-  const cleanZones = zones.filter(z => z.status === 'Limpia').length;
-  const alertZones = zones.filter(z => z.status === 'Alerta - Fuga').length;
-
-  const totalCaptured = reports.filter(r => r.status === 'Capturado').length;
-  const totalSearching = reports.filter(r => r.status === 'Buscando' || r.status === 'Avistado').length;
-  const totalFree = reports.filter(r => r.status === 'Libre en la zona').length;
-
-  const handleSelectPreset = (e) => {
-    const presetName = e.target.value;
-    setSelectedPreset(presetName);
-    const preset = PRESET_LA_GUAIRA_SECTORS.find(s => s.name === presetName);
-    if (preset) {
-      setNewZoneName(preset.name);
-      setCustomLat(preset.center[0].toString());
-      setCustomLng(preset.center[1].toString());
-    }
-  };
-
-  const saveZone = async (e) => {
-    e.preventDefault();
-    if (!newZoneName.trim()) return;
-
-    const zoneId = generateId();
-    const preset = PRESET_LA_GUAIRA_SECTORS.find(s => s.name === selectedPreset);
-
-    const newZone = {
-      name: newZoneName,
-      description: newZoneDesc,
-      status: 'Pendiente',
-      assignedGroup: null,
-      center: [parseFloat(customLat), parseFloat(customLng)],
-      bounds: preset ? preset.bounds : null,
-      createdAt: new Date().toISOString()
-    };
-
-    if (db && user) {
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'zones', zoneId), newZone);
-    }
+  const counts = {
+    totalGroups: groups.length,
+    totalSectors: sectors.length,
+    limpias: sectors.filter(s => s.status === 'limpia').length,
+    enProgreso: sectors.filter(s => s.status === 'en_progreso').length,
+    pendientes: sectors.filter(s => s.status === 'pendiente').length,
+    alertaFuga: sectors.filter(s => s.status === 'alerta_fuga').length,
     
-    setIsCreatingZone(false);
-    setNewZoneName('');
-    setNewZoneDesc('');
-    setSelectedPreset('');
+    // Animals
+    capturados: animals.filter(a => a.status === 'Capturado').length,
+    buscando: animals.filter(a => a.status === 'Buscando' || a.status === 'Avistado').length,
+    libres: animals.filter(a => a.status === 'Libre en la zona').length,
+    fallecidos: animals.filter(a => a.status === 'Fallecido en la zona').length
   };
-
-  const updateZoneStatus = async (zoneId, newStatus) => {
-    if (db && user) {
-      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'zones', zoneId), { status: newStatus });
-    }
-  };
-
-  const updateZoneAssignment = async (zoneId, groupId) => {
-    if (db && user) {
-      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'zones', zoneId), { assignedGroup: groupId || null });
-    }
-  };
-
-  const createGroup = async (e) => {
-    e.preventDefault();
-    const name = e.target.groupName.value;
-    const leader = e.target.leaderName.value;
-    if (!name) return;
-
-    const groupId = generateId();
-    const newGroup = { name, leader: leader || 'Sin Líder Asignado', createdAt: new Date().toISOString() };
-
-    if (db && user) {
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'groups', groupId), newGroup);
-    }
-    e.target.reset();
-  };
-
-  const addVolunteer = async (e) => {
-    e.preventDefault();
-    const form = e.target;
-    const volId = generateId();
-    const newVol = {
-      name: form.volName.value,
-      phone: form.volPhone.value || 'N/A',
-      role: form.volRole.value,
-      groupId: form.volGroup.value || null,
-      createdAt: new Date().toISOString()
-    };
-
-    if (db && user) {
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'volunteers', volId), newVol);
-    }
-    setShowVolunteerModal(false);
-  };
-
-  const submitReport = async (e) => {
-    e.preventDefault();
-    const form = e.target;
-    const reportId = generateId();
-    
-    let lat = userLocation ? userLocation.lat : (selectedZone?.center ? selectedZone.center[0] : 10.600);
-    let lng = userLocation ? userLocation.lng : (selectedZone?.center ? selectedZone.center[1] : -66.932);
-
-    const newReport = {
-      zoneId: selectedZone ? selectedZone.id : 'desconocida',
-      zoneName: selectedZone ? selectedZone.name : 'Sector General',
-      animalType: form.animalType.value,
-      status: form.status.value,
-      description: form.description.value,
-      imageUrl: form.imageUrl.value || 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=400&q=80',
-      lat: lat,
-      lng: lng,
-      timestamp: new Date().toISOString(),
-      reporterId: user.uid
-    };
-
-    if (db && user) {
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'reports', reportId), newReport);
-    }
-    
-    setShowReportForm(false);
-  };
-
-  if (!user) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-slate-900 text-white">
-        <div className="text-center p-6">
-          <Activity className="w-16 h-16 text-yellow-400 mx-auto mb-4 animate-spin" />
-          <h2 className="text-2xl font-black">Conectando al Sistema Operativo</h2>
-          <p className="text-slate-400 mt-2 text-sm">Cargando base de datos de rescate animal La Guaira...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col font-sans text-slate-800">
-      
-      {/* Header Bar */}
-      <header className="bg-slate-900 text-white p-4 shadow-xl sticky top-0 z-40">
-        <div className="container mx-auto max-w-7xl flex flex-col md:flex-row justify-between items-center gap-4">
+    <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col font-sans">
+      {/* Top Header */}
+      <header className="bg-slate-800/90 border-b border-slate-700/80 sticky top-0 z-30 backdrop-blur-md px-4 py-3">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="bg-yellow-500 p-2.5 rounded-xl text-slate-900 shadow-md">
-              <Compass className="w-7 h-7" />
+            <div className="p-2.5 bg-gradient-to-br from-red-500 to-amber-500 rounded-xl shadow-lg shadow-red-500/20">
+              <ShieldAlert className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h1 className="text-xl sm:text-2xl font-black tracking-tight">
-                Rescate Animal <span className="text-yellow-400">La Guaira</span>
-              </h1>
-              <p className="text-slate-400 text-xs font-medium">Coordinación Operativa Post-Terremoto 2026</p>
+              <h1 className="text-lg font-bold text-white leading-tight">Rescate Animal La Guaira</h1>
+              <p className="text-xs text-slate-400">Coordinación en Terreno Post-Sismo</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
-            <button 
-              onClick={locateUser}
-              disabled={isLocating}
-              className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-extrabold px-3.5 py-2 rounded-xl flex items-center gap-2 shadow transition-colors"
-            >
-              <Navigation className={`w-4 h-4 ${isLocating ? 'animate-spin' : ''}`} />
-              {isLocating ? 'Obteniendo GPS...' : '📍 Mi Ubicación GPS'}
-            </button>
+          {/* Admin toggle & Live indicator */}
+          <div className="flex items-center gap-3">
+            <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-full text-xs text-emerald-400">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              Sincronización en Vivo
+            </div>
 
-            <label className="flex items-center gap-2 text-xs font-bold cursor-pointer bg-slate-800 hover:bg-slate-700 px-3.5 py-2 rounded-xl border border-slate-700 text-slate-200 transition-colors">
-              <input 
-                type="checkbox" 
-                checked={isAdmin} 
-                onChange={(e) => setIsAdmin(e.target.checked)} 
-                className="w-4 h-4 rounded text-yellow-500 focus:ring-yellow-400" 
-              />
-              Modo Coordinador (Admin)
-            </label>
+            <button
+              onClick={() => setIsAdmin(!isAdmin)}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border ${
+                isAdmin 
+                  ? 'bg-amber-500/20 border-amber-500/50 text-amber-300 hover:bg-amber-500/30' 
+                  : 'bg-slate-700 border-slate-600 text-slate-300 hover:bg-slate-600'
+              }`}
+            >
+              <Shield className="w-4 h-4" />
+              {isAdmin ? 'Modo: Administrador' : 'Modo: Voluntario'}
+            </button>
           </div>
         </div>
       </header>
 
-      {/* Top Counters Statistics Bar */}
-      <section className="bg-slate-800 border-t border-slate-700 text-white py-3 px-4 shadow-inner">
-        <div className="container mx-auto max-w-7xl grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 text-center">
-          
-          <div className="bg-slate-900/60 p-2 rounded-lg border border-slate-700">
-            <span className="text-[10px] uppercase font-bold text-slate-400 block">Equipos</span>
-            <span className="text-lg font-black text-blue-400">{groups.length}</span>
+      {/* Top Summary Stats Bar */}
+      <section className="bg-slate-800/50 border-b border-slate-700/60 py-2.5 px-4 overflow-x-auto">
+        <div className="max-w-7xl mx-auto flex items-center justify-between min-w-[700px] gap-2 text-xs">
+          <div className="flex items-center gap-4 bg-slate-900/60 px-3 py-1.5 rounded-lg border border-slate-700/50">
+            <span className="text-slate-400 flex items-center gap-1 font-medium"><Users className="w-3.5 h-3.5 text-blue-400"/> Grupos: <strong className="text-white">{counts.totalGroups}</strong></span>
+            <span className="text-slate-400 flex items-center gap-1 font-medium"><MapPin className="w-3.5 h-3.5 text-purple-400"/> Cuadrículas: <strong className="text-white">{counts.totalSectors}</strong></span>
           </div>
 
-          <div className="bg-slate-900/60 p-2 rounded-lg border border-slate-700">
-            <span className="text-[10px] uppercase font-bold text-slate-400 block">Total Zonas</span>
-            <span className="text-lg font-black text-white">{totalZones}</span>
+          <div className="flex items-center gap-2">
+            <div className="px-2.5 py-1 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500"></span> Limpias: <strong>{counts.limpias}</strong>
+            </div>
+            <div className="px-2.5 py-1 rounded bg-amber-500/15 border border-amber-500/30 text-amber-300 flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-amber-500"></span> En Progreso: <strong>{counts.enProgreso}</strong>
+            </div>
+            <div className="px-2.5 py-1 rounded bg-rose-500/15 border border-rose-500/30 text-rose-300 flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-rose-500"></span> Pendientes: <strong>{counts.pendientes}</strong>
+            </div>
+            <div className="px-2.5 py-1 rounded bg-orange-500/15 border border-orange-500/30 text-orange-300 flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-orange-500"></span> Alerta Fuga: <strong>{counts.alertaFuga}</strong>
+            </div>
           </div>
 
-          <div className="bg-red-950/40 p-2 rounded-lg border border-red-800/50">
-            <span className="text-[10px] uppercase font-bold text-red-300 block">Por Revisar</span>
-            <span className="text-lg font-black text-red-400">{pendingZones}</span>
+          <div className="flex items-center gap-2 bg-slate-900/60 px-3 py-1.5 rounded-lg border border-slate-700/50">
+            <span className="text-emerald-400 font-medium">🐾 Capturados: <strong>{counts.capturados}</strong></span>
+            <span className="text-amber-400 font-medium">🔍 Buscando: <strong>{counts.buscando}</strong></span>
+            <span className="text-stone-400 font-medium">🖤 Fallecidos: <strong>{counts.fallecidos}</strong></span>
           </div>
-
-          <div className="bg-yellow-950/40 p-2 rounded-lg border border-yellow-800/50">
-            <span className="text-[10px] uppercase font-bold text-yellow-300 block">En Progreso</span>
-            <span className="text-lg font-black text-yellow-400">{inProgressZones}</span>
-          </div>
-
-          <div className="bg-green-950/40 p-2 rounded-lg border border-green-800/50">
-            <span className="text-[10px] uppercase font-bold text-green-300 block">Zonas Limpias</span>
-            <span className="text-lg font-black text-green-400">{cleanZones}</span>
-          </div>
-
-          <div className="bg-orange-950/40 p-2 rounded-lg border border-orange-800/50">
-            <span className="text-[10px] uppercase font-bold text-orange-300 block">Alerta / Fuga</span>
-            <span className="text-lg font-black text-orange-400">{alertZones}</span>
-          </div>
-
-          <div className="bg-emerald-950/40 p-2 rounded-lg border border-emerald-800/50">
-            <span className="text-[10px] uppercase font-bold text-emerald-300 block">Capturados</span>
-            <span className="text-lg font-black text-emerald-400">{totalCaptured}</span>
-          </div>
-
-          <div className="bg-purple-950/40 p-2 rounded-lg border border-purple-800/50">
-            <span className="text-[10px] uppercase font-bold text-purple-300 block">Buscando/Libres</span>
-            <span className="text-lg font-black text-purple-300">{totalSearching + totalFree}</span>
-          </div>
-
         </div>
       </section>
 
-      {/* Navigation Tab Menu */}
-      <nav className="bg-white shadow-sm border-b border-slate-200 sticky top-[72px] z-30">
-        <div className="container mx-auto max-w-7xl flex overflow-x-auto">
+      {/* Navigation Tabs */}
+      <nav className="bg-slate-800 border-b border-slate-700 px-4">
+        <div className="max-w-7xl mx-auto flex items-center gap-2 overflow-x-auto">
           {[
-            { id: 'map', icon: MapIcon, label: 'Mapa Interactivo' },
-            { id: 'zones', icon: MapPin, label: 'Lista de Cuadrículas' },
-            { id: 'groups', icon: Users, label: 'Grupos y Asignaciones' },
-            { id: 'volunteers', icon: UserPlus, label: 'Voluntarios' },
-            { id: 'reports', icon: ImageIcon, label: 'Bitácora y Galería' }
-          ].map(tab => (
-            <button 
-              key={tab.id}
-              onClick={() => setView(tab.id)} 
-              className={`flex-1 min-w-[120px] py-3.5 px-3 text-center font-bold text-xs sm:text-sm border-b-4 transition-all flex flex-col sm:flex-row items-center justify-center gap-2
-                ${view === tab.id ? 'border-blue-600 text-blue-700 bg-blue-50/60' : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-800'}`}
-            >
-              <tab.icon className={`w-4 h-4 ${view === tab.id ? 'text-blue-600' : 'text-slate-400'}`} /> 
-              {tab.label}
-            </button>
-          ))}
+            { id: 'mapa', label: 'Mapa Interactivo GPS', icon: MapIcon },
+            { id: 'zonas', label: 'Sectores / Cuadrículas', icon: Layers },
+            { id: 'grupos', label: 'Grupos de Trabajo', icon: Users },
+            { id: 'voluntarios', label: 'Directorio Voluntarios', icon: UserPlus },
+            { id: 'galeria', label: 'Registro Fotográfico', icon: ImageIcon }
+          ].map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2 py-3 px-4 text-xs font-semibold border-b-2 whitespace-nowrap transition-all ${
+                  isActive 
+                    ? 'border-amber-400 text-amber-400 bg-slate-700/40' 
+                    : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-700/20'
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                {tab.label}
+              </button>
+            );
+          })}
         </div>
       </nav>
 
-      {/* Main View Container */}
-      <main className="flex-1 container mx-auto max-w-7xl p-4 sm:p-6">
+      {/* Main Content Area */}
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 space-y-6">
         
-        {/* VIEW 1: MAP INTERACTIVE */}
-        {view === 'map' && (
+        {/* TAB 1: INTERACTIVE MAP */}
+        {activeTab === 'mapa' && (
           <div className="space-y-4">
-            
-            <div className="bg-white p-3 rounded-xl shadow-sm border border-slate-200 flex flex-wrap gap-4 items-center justify-between text-xs font-bold">
-              <span className="text-slate-500 uppercase tracking-wider">Leyenda de Zonas:</span>
-              <div className="flex flex-wrap gap-3">
-                <span className="flex items-center gap-1.5"><span className="w-3.5 h-3.5 rounded-full bg-red-500 inline-block"></span> Rojo: Por revisar</span>
-                <span className="flex items-center gap-1.5"><span className="w-3.5 h-3.5 rounded-full bg-yellow-500 inline-block"></span> Amarillo: Trabajando</span>
-                <span className="flex items-center gap-1.5"><span className="w-3.5 h-3.5 rounded-full bg-green-500 inline-block"></span> Verde: Limpia</span>
-                <span className="flex items-center gap-1.5"><span className="w-3.5 h-3.5 rounded-full bg-orange-500 inline-block"></span> Naranja: Alerta/Fuga</span>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-800 p-4 rounded-xl border border-slate-700">
+              <div>
+                <h2 className="text-base font-bold text-white flex items-center gap-2">
+                  <Compass className="w-5 h-5 text-amber-400" /> Mapa del Estado La Guaira por Cuadrículas
+                </h2>
+                <p className="text-xs text-slate-400">
+                  Visualiza los sectores delimitados, la ubicación de los animales reportados y ubícate en tiempo real.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <button
+                  onClick={handleGetLocation}
+                  disabled={isLocating}
+                  className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-3.5 py-2 rounded-lg text-xs font-bold transition-all shadow-md shadow-blue-600/20"
+                >
+                  <Navigation className={`w-4 h-4 ${isLocating ? 'animate-spin' : ''}`} />
+                  {isLocating ? 'Localizando GPS...' : '📍 Mi Ubicación GPS'}
+                </button>
+
+                <button
+                  onClick={() => {
+                    setSelectedSectorForReport(sectors[0] || null);
+                    setShowReportModal(true);
+                  }}
+                  className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-900 px-3.5 py-2 rounded-lg text-xs font-bold transition-all shadow-md shadow-amber-500/20"
+                >
+                  <Plus className="w-4 h-4" /> + Reportar Animal
+                </button>
               </div>
             </div>
 
-            <div className="relative rounded-2xl overflow-hidden shadow-lg border-2 border-slate-300 h-[65vh]">
-              <div ref={mapContainerRef} className="w-full h-full bg-slate-200 z-10" />
-            </div>
+            {/* Leaflet Canvas */}
+            <div className="bg-slate-800 rounded-xl p-2 border border-slate-700 shadow-xl relative min-h-[500px]">
+              <div id="leaflet-map-canvas" className="w-full h-[520px] rounded-lg z-0"></div>
 
-            {selectedZone && (
-              <div className="bg-white p-4 rounded-xl border border-blue-200 shadow flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-black text-lg text-slate-900">{selectedZone.name}</h3>
-                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${ZONE_COLORS[selectedZone.status]?.badge}`}>
-                      {selectedZone.status}
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-600 mt-1">{selectedZone.description || 'Sin notas de sector.'}</p>
-                </div>
-                <div className="flex items-center gap-2 w-full md:w-auto">
-                  <button 
-                    onClick={() => setShowReportForm(true)}
-                    className="flex-1 md:flex-none px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 transition-colors flex items-center justify-center gap-1"
-                  >
-                    <Plus className="w-4 h-4"/> Añadir Reporte Aquí
-                  </button>
-                </div>
+              {/* Map Color Legend */}
+              <div className="absolute bottom-4 right-4 bg-slate-900/90 border border-slate-700 backdrop-blur-md p-3 rounded-lg text-xs space-y-1.5 z-10 shadow-lg">
+                <p className="font-bold text-slate-300 text-[11px] border-b border-slate-800 pb-1 mb-1">Leyenda de Zonas</p>
+                <div className="flex items-center gap-2 text-slate-300"><span className="w-3 h-3 rounded bg-emerald-500"></span> Verde: Zona Limpia</div>
+                <div className="flex items-center gap-2 text-slate-300"><span className="w-3 h-3 rounded bg-amber-500"></span> Amarillo: En Progreso</div>
+                <div className="flex items-center gap-2 text-slate-300"><span className="w-3 h-3 rounded bg-rose-500"></span> Rojo: Pendiente</div>
+                <div className="flex items-center gap-2 text-slate-300"><span className="w-3 h-3 rounded bg-orange-500"></span> Naranja: Alerta / Fuga</div>
               </div>
-            )}
+            </div>
           </div>
         )}
 
-        {/* VIEW 2: ZONES GRID LIST */}
-        {view === 'zones' && (
-          <div className="space-y-6">
-            {isAdmin && (
-              <AdminPanel 
-                isCreatingZone={isCreatingZone}
-                setIsCreatingZone={setIsCreatingZone}
-                selectedPreset={selectedPreset}
-                handleSelectPreset={handleSelectPreset}
-                newZoneName={newZoneName}
-                setNewZoneName={setNewZoneName}
-                customLat={customLat}
-                setCustomLat={setCustomLat}
-                customLng={customLng}
-                setCustomLng={setCustomLng}
-                newZoneDesc={newZoneDesc}
-                setNewZoneDesc={setNewZoneDesc}
-                saveZone={saveZone}
-              />
-            )}
+        {/* TAB 2: SECTORS & GRIDS MANAGEMENT */}
+        {activeTab === 'zonas' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between bg-slate-800 p-4 rounded-xl border border-slate-700">
+              <div>
+                <h2 className="text-base font-bold text-white flex items-center gap-2">
+                  <Layers className="w-5 h-5 text-amber-400" /> Estado de las Cuadrículas del Estado
+                </h2>
+                <p className="text-xs text-slate-400">
+                  Cambia el estado de limpieza de cada zona a medida que los equipos avancen en la búsqueda y captura.
+                </p>
+              </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {zones.map(zone => {
-                const assignedGroup = groups.find(g => g.id === zone.assignedGroup);
-                const zoneVolunteers = volunteers.filter(v => v.groupId === zone.assignedGroup);
+              {isAdmin && (
+                <button
+                  onClick={() => setShowSectorModal(true)}
+                  className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-900 px-3.5 py-2 rounded-lg text-xs font-bold transition-all shadow-md"
+                >
+                  <Plus className="w-4 h-4" /> Crear Nueva Cuadrícula
+                </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {sectors.map((sec) => {
+                const info = getSectorStatusInfo(sec.status);
+                const assignedGrp = groups.find(g => g.id === sec.assignedGroupId);
+                const secAnimals = animals.filter(a => a.sectorId === sec.id);
 
                 return (
-                  <div key={zone.id} className={`border-2 rounded-2xl p-5 shadow-sm transition-all bg-white ${ZONE_COLORS[zone.status]?.border}`}>
-                    <div className="flex justify-between items-start mb-3">
-                      <h3 className="font-extrabold text-lg text-slate-900">{zone.name}</h3>
-                      <span className={`px-2.5 py-1 rounded-full text-xs font-black uppercase border ${ZONE_COLORS[zone.status]?.badge}`}>
-                        {zone.status}
-                      </span>
-                    </div>
-
-                    {zone.description && <p className="text-xs text-slate-600 mb-4">{zone.description}</p>}
-
-                    <div className="bg-slate-50 p-3 rounded-xl mb-4 border border-slate-200 text-xs space-y-2">
-                      <div className="flex justify-between items-center">
-                        <span className="font-bold text-slate-700 flex items-center gap-1">
-                          <Users className="w-3.5 h-3.5 text-blue-600" /> Grupo Asignado:
+                  <div key={sec.id} className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden shadow-md flex flex-col justify-between">
+                    <div>
+                      {/* Card Header Status Indicator */}
+                      <div className={`p-3 ${info.bg} flex items-center justify-between text-white`}>
+                        <span className="font-bold text-sm drop-shadow">{sec.name}</span>
+                        <span className="text-[11px] font-extrabold uppercase bg-black/20 px-2 py-0.5 rounded backdrop-blur-sm">
+                          {info.label}
                         </span>
-                        {isAdmin ? (
-                          <select 
-                            className="border rounded text-xs p-1 bg-white"
-                            value={zone.assignedGroup || ''}
-                            onChange={(e) => updateZoneAssignment(zone.id, e.target.value)}
-                          >
-                            <option value="">-- Sin Grupo --</option>
-                            {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-                          </select>
-                        ) : (
-                          <span className="font-extrabold text-blue-800">{assignedGroup ? assignedGroup.name : 'Ninguno'}</span>
+                      </div>
+
+                      <div className="p-4 space-y-3">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-slate-400">Equipo Asignado:</span>
+                          <span className="font-semibold text-amber-300">{assignedGrp ? assignedGrp.name : 'Sin Asignar'}</span>
+                        </div>
+
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-slate-400">Animales Registrados:</span>
+                          <span className="font-semibold text-slate-200">{secAnimals.length} registros</span>
+                        </div>
+
+                        {sec.notes && (
+                          <p className="text-xs text-slate-300 bg-slate-900/60 p-2.5 rounded-lg border border-slate-700/60">
+                            {sec.notes}
+                          </p>
                         )}
                       </div>
-
-                      {assignedGroup && (
-                        <div>
-                          <p className="text-[10px] uppercase font-bold text-slate-400 mt-1">Voluntarios Activos en Zona ({zoneVolunteers.length}):</p>
-                          <p className="text-slate-700 font-medium">
-                            {zoneVolunteers.length > 0 ? zoneVolunteers.map(v => v.name).join(', ') : 'Sin miembros aún.'}
-                          </p>
-                        </div>
-                      )}
                     </div>
 
-                    <div className="flex flex-col gap-2">
-                      <button 
-                        onClick={() => { setSelectedZone(zone); setShowReportForm(true); }}
-                        className="bg-blue-600 text-white py-2 rounded-lg text-xs font-bold hover:bg-blue-700 transition-colors flex items-center justify-center gap-1"
-                      >
-                        <Plus className="w-4 h-4"/> Añadir Reporte de Animal
-                      </button>
+                    {/* Status Update Controls */}
+                    <div className="p-3 bg-slate-800/80 border-t border-slate-700/80 space-y-2">
+                      <p className="text-[11px] text-slate-400 font-semibold">Actualizar Estado de la Zona:</p>
+                      <div className="grid grid-cols-2 gap-1.5 text-[11px]">
+                        <button
+                          onClick={() => {
+                            setSectors(sectors.map(s => s.id === sec.id ? { ...s, status: 'limpia' } : s));
+                          }}
+                          className={`p-1.5 rounded font-semibold transition-all border ${
+                            sec.status === 'limpia' 
+                              ? 'bg-emerald-500 text-white border-emerald-400' 
+                              : 'bg-slate-700/50 text-emerald-400 border-slate-600 hover:bg-emerald-500/20'
+                          }`}
+                        >
+                          ✓ Limpia
+                        </button>
 
-                      {isAdmin && (
-                        <div className="pt-3 border-t border-slate-200 mt-2">
-                          <p className="text-[10px] font-bold uppercase text-slate-400 mb-1">Cambiar Estado de Cuadrícula:</p>
-                          <div className="grid grid-cols-2 gap-1.5">
-                            {Object.keys(ZONE_COLORS).filter(k => k !== 'Sin asignar').map(status => (
-                              <button 
-                                key={status} 
-                                onClick={() => updateZoneStatus(zone.id, status)}
-                                className={`text-[11px] py-1 px-2 rounded font-bold border transition-colors ${zone.status === status ? 'bg-slate-900 text-white' : 'bg-white text-slate-700 hover:bg-slate-100'}`}
-                              >
-                                {status}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      )}
+                        <button
+                          onClick={() => {
+                            setSectors(sectors.map(s => s.id === sec.id ? { ...s, status: 'en_progreso' } : s));
+                          }}
+                          className={`p-1.5 rounded font-semibold transition-all border ${
+                            sec.status === 'en_progreso' 
+                              ? 'bg-amber-500 text-slate-900 border-amber-400' 
+                              : 'bg-slate-700/50 text-amber-400 border-slate-600 hover:bg-amber-500/20'
+                          }`}
+                        >
+                          ⏱ En Progreso
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setSectors(sectors.map(s => s.id === sec.id ? { ...s, status: 'alerta_fuga' } : s));
+                          }}
+                          className={`p-1.5 rounded font-semibold transition-all border ${
+                            sec.status === 'alerta_fuga' 
+                              ? 'bg-orange-500 text-white border-orange-400' 
+                              : 'bg-slate-700/50 text-orange-400 border-slate-600 hover:bg-orange-500/20'
+                          }`}
+                        >
+                          ⚠️ Alerta Fuga
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setSelectedSectorForReport(sec);
+                            setShowReportModal(true);
+                          }}
+                          className="p-1.5 rounded font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-all border border-blue-500"
+                        >
+                          + Reporte
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );
@@ -888,63 +570,75 @@ export default function App() {
           </div>
         )}
 
-        {/* VIEW 3: GROUPS */}
-        {view === 'groups' && (
-          <div className="space-y-6">
-            {isAdmin && (
-              <form onSubmit={createGroup} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-4 items-end">
-                <div className="flex-1 w-full">
-                  <label className="block text-xs font-bold uppercase mb-1 text-slate-700">Nombre del Nuevo Grupo</label>
-                  <input name="groupName" required type="text" placeholder="Ej. Equipo Canino Alfa" className="w-full border p-2.5 rounded-lg text-sm" />
-                </div>
-                <div className="flex-1 w-full">
-                  <label className="block text-xs font-bold uppercase mb-1 text-slate-700">Líder / Responsable</label>
-                  <input name="leaderName" type="text" placeholder="Ej. Dr. Carlos Mendoza" className="w-full border p-2.5 rounded-lg text-sm" />
-                </div>
-                <button type="submit" className="w-full md:w-auto bg-blue-600 text-white px-6 py-2.5 rounded-lg font-bold text-sm">
-                  Crear Grupo
-                </button>
-              </form>
-            )}
+        {/* TAB 3: GROUPS & TEAMS */}
+        {activeTab === 'grupos' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between bg-slate-800 p-4 rounded-xl border border-slate-700">
+              <div>
+                <h2 className="text-base font-bold text-white flex items-center gap-2">
+                  <Users className="w-5 h-5 text-amber-400" /> Grupos de Rescate Configurados
+                </h2>
+                <p className="text-xs text-slate-400">
+                  Asigna brigadas de voluntarios a sectores específicos para mantener el control ordenado.
+                </p>
+              </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {groups.map(group => {
-                const groupVols = volunteers.filter(v => v.groupId === group.id);
-                const assignedZones = zones.filter(z => z.assignedGroup === group.id);
+              {isAdmin && (
+                <button
+                  onClick={() => setShowGroupModal(true)}
+                  className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-900 px-3.5 py-2 rounded-lg text-xs font-bold transition-all shadow-md"
+                >
+                  <Plus className="w-4 h-4" /> Crear Nuevo Grupo
+                </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {groups.map((grp) => {
+                const groupVolunteers = volunteers.filter(v => v.groupId === grp.id);
+                const assignedSectors = sectors.filter(s => s.assignedGroupId === grp.id);
 
                 return (
-                  <div key={group.id} className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm space-y-4">
-                    <div className="flex items-center gap-3 border-b pb-3">
-                      <div className="bg-blue-100 p-2.5 rounded-full text-blue-600">
-                        <Users className="w-6 h-6" />
-                      </div>
+                  <div key={grp.id} className="bg-slate-800 rounded-xl border border-slate-700 p-5 space-y-4 shadow-md">
+                    <div className="flex items-center justify-between border-b border-slate-700 pb-3">
                       <div>
-                        <h3 className="font-extrabold text-base text-slate-900">{group.name}</h3>
-                        <p className="text-xs text-slate-500">Líder: <strong>{group.leader}</strong></p>
+                        <h3 className="font-bold text-white text-base">{grp.name}</h3>
+                        <p className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
+                          <Phone className="w-3 h-3 text-emerald-400"/> Líder: {grp.leader} ({grp.phone})
+                        </p>
                       </div>
+                      <span className="w-3 h-3 rounded-full" style={{ backgroundColor: grp.color }}></span>
                     </div>
 
-                    <div>
-                      <h4 className="text-xs font-bold uppercase text-slate-400 mb-2">Cuadrículas Asignadas ({assignedZones.length}):</h4>
-                      <div className="flex flex-wrap gap-1.5">
-                        {assignedZones.length > 0 ? assignedZones.map(z => (
-                          <span key={z.id} className="bg-slate-100 text-slate-700 text-xs px-2.5 py-1 rounded-full border">
-                            {z.name}
-                          </span>
-                        )) : <span className="text-xs text-slate-400 italic">Sin cuadrícula actual</span>}
-                      </div>
+                    <div className="space-y-2">
+                      <p className="text-xs font-semibold text-slate-300">Zonas Asignadas ({assignedSectors.length}):</p>
+                      {assignedSectors.length > 0 ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {assignedSectors.map(s => (
+                            <span key={s.id} className="text-[11px] bg-slate-700 text-amber-300 px-2 py-0.5 rounded border border-slate-600">
+                              {s.name}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-slate-500 italic">Ninguna zona asignada actualmente.</p>
+                      )}
                     </div>
 
-                    <div>
-                      <h4 className="text-xs font-bold uppercase text-slate-400 mb-2">Voluntarios Integrantes ({groupVols.length}):</h4>
-                      <div className="space-y-1">
-                        {groupVols.map(v => (
-                          <div key={v.id} className="text-xs flex justify-between bg-slate-50 p-2 rounded">
-                            <span className="font-bold text-slate-800">{v.name}</span>
-                            <span className="text-slate-500 text-[11px]">{v.role}</span>
+                    <div className="space-y-2">
+                      <p className="text-xs font-semibold text-slate-300">Voluntarios Integrantes ({groupVolunteers.length}):</p>
+                      <div className="space-y-1.5">
+                        {groupVolunteers.map(v => (
+                          <div key={v.id} className="text-xs bg-slate-900/60 p-2 rounded border border-slate-700/50 flex items-center justify-between">
+                            <div>
+                              <strong className="text-slate-200">{v.name}</strong>
+                              <span className="text-slate-400 text-[11px] block">{v.role}</span>
+                            </div>
+                            <a href={`tel:${v.phone}`} className="text-emerald-400 hover:underline text-[11px]">
+                              {v.phone}
+                            </a>
                           </div>
                         ))}
-                        {groupVols.length === 0 && <p className="text-xs text-slate-400 italic">No hay miembros agregados.</p>}
                       </div>
                     </div>
                   </div>
@@ -954,116 +648,481 @@ export default function App() {
           </div>
         )}
 
-        {/* VIEW 4: VOLUNTEERS DIRECTORY */}
-        {view === 'volunteers' && (
-          <div className="space-y-6">
-            <div className="flex justify-between items-center">
+        {/* TAB 4: VOLUNTEERS DIRECTORY */}
+        {activeTab === 'voluntarios' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between bg-slate-800 p-4 rounded-xl border border-slate-700">
               <div>
-                <h2 className="text-xl font-black text-slate-900">Directorio de Voluntarios</h2>
-                <p className="text-xs text-slate-500">Registro de personal en terreno y asignación de equipos.</p>
+                <h2 className="text-base font-bold text-white flex items-center gap-2">
+                  <UserPlus className="w-5 h-5 text-amber-400" /> Directorio de Voluntarios Registrados
+                </h2>
+                <p className="text-xs text-slate-400">
+                  Lista completa del equipo con teléfonos de contacto directo y asignación de grupo.
+                </p>
               </div>
-              <button 
+
+              <button
                 onClick={() => setShowVolunteerModal(true)}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl flex items-center gap-2"
+                className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-900 px-3.5 py-2 rounded-lg text-xs font-bold transition-all shadow-md"
               >
-                <UserPlus className="w-4 h-4"/> Registrar Voluntario
+                <Plus className="w-4 h-4" /> Registrar Voluntario
               </button>
             </div>
 
-            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 text-slate-500 font-bold border-b">
-                  <tr>
-                    <th className="p-3">Nombre</th>
-                    <th className="p-3">Teléfono</th>
-                    <th className="p-3">Rol / Especialidad</th>
-                    <th className="p-3">Grupo Asignado</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {volunteers.map(vol => {
-                    const group = groups.find(g => g.id === vol.groupId);
-                    return (
-                      <tr key={vol.id} className="hover:bg-slate-50">
-                        <td className="p-3 font-bold text-slate-900">{vol.name}</td>
-                        <td className="p-3 text-slate-600">{vol.phone}</td>
-                        <td className="p-3"><span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded border">{vol.role}</span></td>
-                        <td className="p-3 font-semibold text-slate-700">{group ? group.name : 'Sin Grupo'}</td>
-                      </tr>
-                    );
-                  })}
-                  {volunteers.length === 0 && (
+            <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs text-slate-300">
+                  <thead className="bg-slate-900/80 uppercase text-[10px] text-slate-400 font-bold border-b border-slate-700">
                     <tr>
-                      <td colSpan="4" className="p-6 text-center text-slate-400">No se han registrado voluntarios aún.</td>
+                      <th className="p-3.5">Nombre del Voluntario</th>
+                      <th className="p-3.5">Rol / Especialidad</th>
+                      <th className="p-3.5">Teléfono</th>
+                      <th className="p-3.5">Grupo Asignado</th>
                     </tr>
-                  )}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-700/60">
+                    {volunteers.map(vol => {
+                      const grp = groups.find(g => g.id === vol.groupId);
+                      return (
+                        <tr key={vol.id} className="hover:bg-slate-700/30 transition-all">
+                          <td className="p-3.5 font-bold text-white">{vol.name}</td>
+                          <td className="p-3.5 text-slate-300">{vol.role}</td>
+                          <td className="p-3.5 font-mono text-emerald-400">
+                            <a href={`tel:${vol.phone}`} className="hover:underline flex items-center gap-1">
+                              <Phone className="w-3 h-3" /> {vol.phone}
+                            </a>
+                          </td>
+                          <td className="p-3.5">
+                            <span className="bg-slate-700 text-amber-300 px-2 py-1 rounded text-[11px] font-semibold border border-slate-600">
+                              {grp ? grp.name : 'Sin Grupo'}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}
 
-        {/* VIEW 5: REPORTS LOG & GALLERY */}
-        {view === 'reports' && (
-          <div className="space-y-6">
-            <div>
-              <h2 className="text-xl font-black text-slate-900">Bitácora y Galería Fotográfica</h2>
-              <p className="text-xs text-slate-500">Historial completo de animales avistados, buscando, capturados o fallecidos.</p>
+        {/* TAB 5: PHOTO GALLERY & ANIMAL LOG */}
+        {activeTab === 'galeria' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between bg-slate-800 p-4 rounded-xl border border-slate-700">
+              <div>
+                <h2 className="text-base font-bold text-white flex items-center gap-2">
+                  <ImageIcon className="w-5 h-5 text-amber-400" /> Bitácora Fotográfica de Animales
+                </h2>
+                <p className="text-xs text-slate-400">
+                  Registro visual de cada animal reportado con su estatus de búsqueda o captura.
+                </p>
+              </div>
+
+              <button
+                onClick={() => {
+                  setSelectedSectorForReport(sectors[0] || null);
+                  setShowReportModal(true);
+                }}
+                className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-900 px-3.5 py-2 rounded-lg text-xs font-bold transition-all shadow-md"
+              >
+                <Plus className="w-4 h-4" /> Nuevo Reporte
+              </button>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-              {reports.map(report => (
-                <div key={report.id} className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm flex flex-col">
-                  <div className="h-44 bg-slate-100 relative">
-                    <img 
-                      src={report.imageUrl} 
-                      alt={report.animalType} 
-                      className="w-full h-full object-cover"
-                      onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=400&q=80'; }}
-                    />
-                    <span className="absolute top-2 right-2 bg-black/75 text-white text-[10px] font-black uppercase px-2.5 py-1 rounded-full backdrop-blur-sm">
-                      {report.status}
-                    </span>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {animals.map((anim) => {
+                const badge = getAnimalStatusBadge(anim.status);
+                const BadgeIcon = badge.icon;
+                const sec = sectors.find(s => s.id === anim.sectorId);
+
+                return (
+                  <div key={anim.id} className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden shadow-md flex flex-col justify-between">
+                    <div>
+                      {/* Photo Header */}
+                      <div className="relative h-48 bg-slate-900 overflow-hidden">
+                        {anim.photoUrl ? (
+                          <img src={anim.photoUrl} alt={anim.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex flex-col items-center justify-center text-slate-500">
+                            <Camera className="w-8 h-8 mb-1" />
+                            <span className="text-xs">Sin foto adjunta</span>
+                          </div>
+                        )}
+
+                        <span className={`absolute top-3 right-3 px-2.5 py-1 rounded-full text-xs font-bold border flex items-center gap-1 shadow-lg ${badge.bg}`}>
+                          <BadgeIcon className="w-3.5 h-3.5" />
+                          {anim.status}
+                        </span>
+                      </div>
+
+                      <div className="p-4 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <h3 className="font-bold text-white text-sm">{anim.name}</h3>
+                          <span className="text-xs text-slate-400 bg-slate-700 px-2 py-0.5 rounded">{anim.species}</span>
+                        </div>
+
+                        <p className="text-xs text-slate-300 leading-relaxed bg-slate-900/50 p-2.5 rounded border border-slate-700/50">
+                          {anim.details}
+                        </p>
+
+                        <div className="pt-2 text-[11px] text-slate-400 space-y-1">
+                          <p><strong>Sector:</strong> {sec ? sec.name : 'Desconocido'}</p>
+                          <p><strong>Reportado por:</strong> {anim.reporterName} ({anim.date})</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Quick Status Change */}
+                    <div className="p-3 bg-slate-800/80 border-t border-slate-700/80 flex items-center justify-between gap-1 text-[11px]">
+                      <span className="text-slate-400 font-semibold">Cambiar:</span>
+                      {['Capturado', 'Buscando', 'Libre en la zona', 'Fallecido en la zona'].map(st => (
+                        <button
+                          key={st}
+                          onClick={() => {
+                            setAnimals(animals.map(a => a.id === anim.id ? { ...a, status: st } : a));
+                          }}
+                          className={`px-1.5 py-1 rounded transition-all text-[10px] font-bold ${
+                            anim.status === st 
+                              ? 'bg-amber-500 text-slate-900' 
+                              : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                          }`}
+                        >
+                          {st.split(' ')[0]}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                  <div className="p-4 flex-1 flex flex-col">
-                    <h3 className="font-extrabold text-sm text-slate-900">{report.animalType}</h3>
-                    <p className="text-[11px] font-bold text-blue-600 mt-1 mb-2">📍 {report.zoneName}</p>
-                    <p className="text-xs text-slate-600 flex-1">{report.description || 'Sin notas adicionados.'}</p>
-                    <p className="text-[10px] text-slate-400 mt-3 pt-2 border-t">
-                      {new Date(report.timestamp).toLocaleString()}
-                    </p>
-                  </div>
-                </div>
-              ))}
-              {reports.length === 0 && (
-                <div className="col-span-full bg-white p-12 rounded-2xl border-2 border-dashed border-slate-300 text-center text-slate-400 font-medium">
-                  No hay reportes registrados aún en la bitácora.
-                </div>
-              )}
+                );
+              })}
             </div>
           </div>
         )}
 
       </main>
 
-      {/* Render Modals when active */}
-      {showReportForm && (
-        <ReportModal 
-          selectedZone={selectedZone}
-          userLocation={userLocation}
-          setShowReportForm={setShowReportForm}
-          submitReport={submitReport}
-        />
-      )}
-      
-      {showVolunteerModal && (
-        <VolunteerModal 
-          setShowVolunteerModal={setShowVolunteerModal}
-          addVolunteer={addVolunteer}
-          groups={groups}
-        />
+      {/* MODAL: REPORT ANIMAL */}
+      {showReportModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-800 border border-slate-700 rounded-xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-700 pb-3">
+              <h3 className="font-bold text-white text-base flex items-center gap-2">
+                <Plus className="w-5 h-5 text-amber-400" /> Registrar Avistamiento / Captura
+              </h3>
+              <button onClick={() => setShowReportModal(false)} className="text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const fd = new FormData(e.target);
+              const newAnim = {
+                id: 'anim-' + Date.now(),
+                name: fd.get('name') || 'Sin Nombre',
+                species: fd.get('species'),
+                status: fd.get('status'),
+                sectorId: fd.get('sectorId'),
+                reporterName: fd.get('reporterName') || 'Voluntario',
+                date: new Date().toISOString().replace('T', ' ').substring(0, 16),
+                lat: parseFloat(fd.get('lat')) || (selectedSectorForReport ? selectedSectorForReport.swLat + 0.01 : 10.600),
+                lng: parseFloat(fd.get('lng')) || (selectedSectorForReport ? selectedSectorForReport.swLng + 0.01 : -66.900),
+                photoUrl: fd.get('photoUrl') || '',
+                details: fd.get('details') || ''
+              };
+
+              setAnimals([newAnim, ...animals]);
+              setShowReportModal(false);
+            }} className="space-y-3 text-xs">
+              <div>
+                <label className="block text-slate-300 mb-1 font-semibold">Identificación / Descripción breve</label>
+                <input required name="name" placeholder="Ej. Mestizo Marrón sin collar" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-slate-300 mb-1 font-semibold">Especie</label>
+                  <select name="species" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white">
+                    <option value="Perro">Perro</option>
+                    <option value="Gato">Gato</option>
+                    <option value="Ave">Ave</option>
+                    <option value="Otro">Otro</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 mb-1 font-semibold">Estatus Inicial</label>
+                  <select name="status" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white">
+                    <option value="Avistado">Avistado</option>
+                    <option value="Buscando">Buscando</option>
+                    <option value="Capturado">Capturado / Rescatado</option>
+                    <option value="Libre en la zona">Libre en la zona</option>
+                    <option value="Fallecido en la zona">Fallecido en la zona</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-300 mb-1 font-semibold">Cuadrícula / Sector</label>
+                <select name="sectorId" defaultValue={selectedSectorForReport?.id} className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white">
+                  {sectors.map(s => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-slate-300 mb-1 font-semibold">URL de Foto (Opcional)</label>
+                <input name="photoUrl" placeholder="https://..." className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-slate-300 mb-1 font-semibold">Latitud GPS</label>
+                  <input name="lat" step="any" defaultValue={userLocation?.lat || 10.600} className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
+                </div>
+                <div>
+                  <label className="block text-slate-300 mb-1 font-semibold">Longitud GPS</label>
+                  <input name="lng" step="any" defaultValue={userLocation?.lng || -66.900} className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-300 mb-1 font-semibold">Nombre del Rescatista / Reportero</label>
+                <input name="reporterName" placeholder="Tu nombre" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
+              </div>
+
+              <div>
+                <label className="block text-slate-300 mb-1 font-semibold">Detalles y Estado de Salud</label>
+                <textarea name="details" rows="2" placeholder="Desnutrición, deshidratado, comportamiento agredido..." className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white"></textarea>
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2">
+                <button type="button" onClick={() => setShowReportModal(false)} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded font-semibold text-slate-200">
+                  Cancelar
+                </button>
+                <button type="submit" className="px-4 py-2 bg-amber-500 hover:bg-amber-400 rounded font-bold text-slate-900">
+                  Guardar Reporte
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
+      {/* MODAL: CREATE VOLUNTEER */}
+      {showVolunteerModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-800 border border-slate-700 rounded-xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-700 pb-3">
+              <h3 className="font-bold text-white text-base flex items-center gap-2">
+                <UserPlus className="w-5 h-5 text-amber-400" /> Registrar Nuevo Voluntario
+              </h3>
+              <button onClick={() => setShowVolunteerModal(false)} className="text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const fd = new FormData(e.target);
+              const newVol = {
+                id: 'vol-' + Date.now(),
+                name: fd.get('name'),
+                role: fd.get('role'),
+                phone: fd.get('phone'),
+                groupId: fd.get('groupId')
+              };
+              setVolunteers([...volunteers, newVol]);
+              setShowVolunteerModal(false);
+            }} className="space-y-3 text-xs">
+              <div>
+                <label className="block text-slate-300 mb-1 font-semibold">Nombre Completo</label>
+                <input required name="name" placeholder="Ej. Ana Lucía Pérez" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
+              </div>
+
+              <div>
+                <label className="block text-slate-300 mb-1 font-semibold">Rol / Especialidad</label>
+                <input required name="role" placeholder="Ej. Veterinario, Capturista, Conductor" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
+              </div>
+
+              <div>
+                <label className="block text-slate-300 mb-1 font-semibold">Teléfono de Contacto</label>
+                <input required name="phone" placeholder="+58 412 0000000" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
+              </div>
+
+              <div>
+                <label className="block text-slate-300 mb-1 font-semibold">Grupo Asignado</label>
+                <select name="groupId" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white">
+                  <option value="">Sin Grupo Asignado</option>
+                  {groups.map(g => (
+                    <option key={g.id} value={g.id}>{g.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2">
+                <button type="button" onClick={() => setShowVolunteerModal(false)} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded font-semibold text-slate-200">
+                  Cancelar
+                </button>
+                <button type="submit" className="px-4 py-2 bg-amber-500 hover:bg-amber-400 rounded font-bold text-slate-900">
+                  Registrar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: CREATE GROUP */}
+      {showGroupModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-800 border border-slate-700 rounded-xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-700 pb-3">
+              <h3 className="font-bold text-white text-base flex items-center gap-2">
+                <Users className="w-5 h-5 text-amber-400" /> Crear Nuevo Grupo de Trabajo
+              </h3>
+              <button onClick={() => setShowGroupModal(false)} className="text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const fd = new FormData(e.target);
+              const newGrp = {
+                id: 'grp-' + Date.now(),
+                name: fd.get('name'),
+                leader: fd.get('leader'),
+                phone: fd.get('phone'),
+                color: fd.get('color') || '#3b82f6'
+              };
+              setGroups([...groups, newGrp]);
+              setShowGroupModal(false);
+            }} className="space-y-3 text-xs">
+              <div>
+                <label className="block text-slate-300 mb-1 font-semibold">Nombre del Equipo / Brigada</label>
+                <input required name="name" placeholder="Ej. Brigada de Rescate Caraballeda" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
+              </div>
+
+              <div>
+                <label className="block text-slate-300 mb-1 font-semibold">Líder / Coordinador</label>
+                <input required name="leader" placeholder="Nombre del líder" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
+              </div>
+
+              <div>
+                <label className="block text-slate-300 mb-1 font-semibold">Teléfono del Líder</label>
+                <input required name="phone" placeholder="+58 414 0000000" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
+              </div>
+
+              <div>
+                <label className="block text-slate-300 mb-1 font-semibold">Color Identificador</label>
+                <input type="color" name="color" defaultValue="#3b82f6" className="w-full bg-slate-900 border border-slate-700 rounded h-10 p-1 cursor-pointer" />
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2">
+                <button type="button" onClick={() => setShowGroupModal(false)} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded font-semibold text-slate-200">
+                  Cancelar
+                </button>
+                <button type="submit" className="px-4 py-2 bg-amber-500 hover:bg-amber-400 rounded font-bold text-slate-900">
+                  Crear Equipo
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: CREATE SECTOR */}
+      {showSectorModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-800 border border-slate-700 rounded-xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-700 pb-3">
+              <h3 className="font-bold text-white text-base flex items-center gap-2">
+                <Layers className="w-5 h-5 text-amber-400" /> Crear Nueva Cuadrícula
+              </h3>
+              <button onClick={() => setShowSectorModal(false)} className="text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const fd = new FormData(e.target);
+              const newSec = {
+                id: 'sec-' + Date.now(),
+                name: fd.get('name'),
+                status: 'pendiente',
+                assignedGroupId: fd.get('assignedGroupId'),
+                swLat: parseFloat(fd.get('swLat')),
+                swLng: parseFloat(fd.get('swLng')),
+                neLat: parseFloat(fd.get('neLat')),
+                neLng: parseFloat(fd.get('neLng')),
+                notes: fd.get('notes')
+              };
+              setSectors([...sectors, newSec]);
+              setShowSectorModal(false);
+            }} className="space-y-3 text-xs">
+              <div>
+                <label className="block text-slate-300 mb-1 font-semibold">Nombre del Sector / Cuadrícula</label>
+                <input required name="name" placeholder="Ej. Cuadrícula E1 - Naiguatá Este" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-slate-300 mb-1 font-semibold">Latitud Sudoeste (SW)</label>
+                  <input name="swLat" step="any" defaultValue="10.600" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
+                </div>
+                <div>
+                  <label className="block text-slate-300 mb-1 font-semibold">Longitud Sudoeste (SW)</label>
+                  <input name="swLng" step="any" defaultValue="-66.800" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-slate-300 mb-1 font-semibold">Latitud Noreste (NE)</label>
+                  <input name="neLat" step="any" defaultValue="10.630" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
+                </div>
+                <div>
+                  <label className="block text-slate-300 mb-1 font-semibold">Longitud Noreste (NE)</label>
+                  <input name="neLng" step="any" defaultValue="-66.750" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-300 mb-1 font-semibold">Asignar Grupo Inicial</label>
+                <select name="assignedGroupId" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white">
+                  <option value="">Sin Grupo Asignado</option>
+                  {groups.map(g => (
+                    <option key={g.id} value={g.id}>{g.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-slate-300 mb-1 font-semibold">Instrucciones o Notas</label>
+                <textarea name="notes" rows="2" placeholder="Puntos de referencia, escombros principales..." className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white"></textarea>
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2">
+                <button type="button" onClick={() => setShowSectorModal(false)} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded font-semibold text-slate-200">
+                  Cancelar
+                </button>
+                <button type="submit" className="px-4 py-2 bg-amber-500 hover:bg-amber-400 rounded font-bold text-slate-900">
+                  Crear Sector
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Footer */}
+      <footer className="bg-slate-900 border-t border-slate-800 p-4 text-center text-xs text-slate-500">
+        Rescate Animal La Guaira &copy; 2026. Plataforma de coordinación para rescatistas y brigadas comunitarias.
+      </footer>
     </div>
   );
 }
