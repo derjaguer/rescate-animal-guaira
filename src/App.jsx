@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Plus, Users, Map as MapIcon, Image as ImageIcon, CheckCircle, AlertTriangle, 
-  RefreshCw, Shield, MapPin, X, Navigation, UserPlus, Phone, Activity, Heart,
-  Search, ShieldAlert, CheckCircle2, AlertOctagon, HelpCircle, Eye, Compass,
-  Layers, Filter, Edit3, Trash2, Camera, Check, Clock, AlertCircle
+  Shield, MapPin, X, Navigation, UserPlus, Phone, Heart, Search, ShieldAlert, 
+  CheckCircle2, AlertOctagon, HelpCircle, Eye, Compass, Layers, Edit3, Trash2, 
+  Camera, Lock, LogIn, LogOut, Check, AlertCircle
 } from 'lucide-react';
 
-// Default Firebase Credentials for "rescate-animal-guaira"
+// Credenciales por defecto para "rescate-animal-guaira"
 const DEFAULT_FIREBASE_CONFIG = {
   apiKey: "AIzaSyBhA87FvcrpLbmRSbWOHz8QqT7lk_Vcz_o",
   authDomain: "rescate-animal-guaira.firebaseapp.com",
@@ -125,7 +125,12 @@ const INITIAL_ANIMALS = [
 ];
 
 export default function App() {
-  const [isAdmin, setIsAdmin] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [loginUsername, setLoginUsername] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+
   const [activeTab, setActiveTab] = useState('mapa'); // 'mapa', 'zonas', 'grupos', 'voluntarios', 'galeria'
   
   // Data States
@@ -134,131 +139,166 @@ export default function App() {
   const [volunteers, setVolunteers] = useState(INITIAL_VOLUNTEERS);
   const [animals, setAnimals] = useState(INITIAL_ANIMALS);
 
-  // Modals & UI States
+  // Modals & Edit States
   const [showReportModal, setShowReportModal] = useState(false);
+  const [editingAnimal, setEditingAnimal] = useState(null);
+
   const [showVolunteerModal, setShowVolunteerModal] = useState(false);
+  const [editingVolunteer, setEditingVolunteer] = useState(null);
+
   const [showGroupModal, setShowGroupModal] = useState(false);
+  const [editingGroup, setEditingGroup] = useState(null);
+
   const [showSectorModal, setShowSectorModal] = useState(false);
+  const [editingSector, setEditingSector] = useState(null);
+
   const [selectedSectorForReport, setSelectedSectorForReport] = useState(null);
   
   // Leaflet map reference & script status
-  const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const [leafletLoaded, setLeafletLoaded] = useState(false);
   const [userLocation, setUserLocation] = useState(null);
   const [isLocating, setIsLocating] = useState(false);
 
+  // Inject Leaflet CSS & JS dynamically
   useEffect(() => {
-    // Check if Leaflet CSS & JS are already injected
     if (window.L) {
       setLeafletLoaded(true);
       return;
     }
 
-    const leafletCss = document.createElement('link');
-    leafletCss.rel = 'stylesheet';
-    leafletCss.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-    document.head.appendChild(leafletCss);
+    const existingCss = document.getElementById('leaflet-css');
+    if (!existingCss) {
+      const leafletCss = document.createElement('link');
+      leafletCss.id = 'leaflet-css';
+      leafletCss.rel = 'stylesheet';
+      leafletCss.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+      document.head.appendChild(leafletCss);
+    }
 
-    const leafletJs = document.createElement('script');
-    leafletJs.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-    leafletJs.onload = () => setLeafletLoaded(true);
-    document.head.appendChild(leafletJs);
+    const existingJs = document.getElementById('leaflet-js');
+    if (!existingJs) {
+      const leafletJs = document.createElement('script');
+      leafletJs.id = 'leaflet-js';
+      leafletJs.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+      leafletJs.onload = () => setLeafletLoaded(true);
+      document.head.appendChild(leafletJs);
+    } else {
+      existingJs.addEventListener('load', () => setLeafletLoaded(true));
+    }
   }, []);
 
+  // Initialize and update Leaflet Map
   useEffect(() => {
     if (!leafletLoaded || activeTab !== 'mapa') return;
 
-    // Wait for container element
-    const container = document.getElementById('leaflet-map-canvas');
-    if (!container) return;
+    const timer = setTimeout(() => {
+      const container = document.getElementById('leaflet-map-canvas');
+      if (!container || !window.L) return;
 
-    if (mapInstanceRef.current) {
-      mapInstanceRef.current.remove();
-      mapInstanceRef.current = null;
-    }
-
-    try {
-      const L = window.L;
-      // Center map on La Guaira state
-      const map = L.map('leaflet-map-canvas').setView([10.595, -66.930], 12);
-      mapInstanceRef.current = map;
-
-      // Add OpenStreetMap base tile layer
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors | Rescate La Guaira'
-      }).addTo(map);
-
-      // Render sector grid rectangles on map
-      sectors.forEach((sec) => {
-        const info = getSectorStatusInfo(sec.status);
-        const bounds = [[sec.swLat, sec.swLng], [sec.neLat, sec.neLng]];
-
-        const rect = L.rectangle(bounds, {
-          color: info.hex,
-          weight: 3,
-          fillColor: info.hex,
-          fillOpacity: 0.25
-        }).addTo(map);
-
-        const assignedGrp = groups.find(g => g.id === sec.assignedGroupId);
-
-        rect.bindPopup(`
-          <div style="font-family: sans-serif; padding: 4px;">
-            <strong style="font-size: 14px; color: #1e293b;">${sec.name}</strong><br/>
-            <span style="display: inline-block; margin-top: 4px; padding: 2px 6px; border-radius: 4px; background: ${info.hex}; color: white; font-size: 11px; font-weight: bold;">
-              ${info.label}
-            </span>
-            <p style="margin: 6px 0; font-size: 12px; color: #475569;">
-              <strong>Equipo:</strong> ${assignedGrp ? assignedGrp.name : 'Sin asignar'}
-            </p>
-            <p style="margin: 4px 0; font-size: 11px; color: #64748b;">${sec.notes || ''}</p>
-          </div>
-        `);
-      });
-
-      // Render animal pin markers on map
-      animals.forEach((anim) => {
-        const badge = getAnimalStatusBadge(anim.status);
-        const marker = L.circleMarker([anim.lat, anim.lng], {
-          radius: 8,
-          fillColor: anim.status === 'Capturado' ? '#10b981' : anim.status === 'Buscando' ? '#f59e0b' : '#3b82f6',
-          color: '#ffffff',
-          weight: 2,
-          fillOpacity: 0.9
-        }).addTo(map);
-
-        marker.bindPopup(`
-          <div style="font-family: sans-serif; max-width: 200px;">
-            ${anim.photoUrl ? `<img src="${anim.photoUrl}" style="width:100%; height:100px; object-fit:cover; border-radius:6px; margin-bottom:6px;" />` : ''}
-            <strong style="font-size: 13px; color: #0f172a;">${anim.name} (${anim.species})</strong><br/>
-            <span style="font-size: 11px; color: #0284c7; font-weight: 600;">Estatus: ${anim.status}</span>
-            <p style="font-size: 11px; color: #334155; margin: 4px 0;">${anim.details}</p>
-            <small style="color: #94a3b8; font-size: 10px;">Reportado por: ${anim.reporterName}</small>
-          </div>
-        `);
-      });
-
-      // Add user location marker if requested
-      if (userLocation) {
-        L.marker([userLocation.lat, userLocation.lng])
-          .addTo(map)
-          .bindPopup('<b>📍 Tu Ubicación Actual (GPS)</b>')
-          .openPopup();
-        map.setView([userLocation.lat, userLocation.lng], 14);
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
       }
 
-    } catch (err) {
-      console.error("Error initializing Leaflet map:", err);
-    }
+      try {
+        const L = window.L;
+        const map = L.map('leaflet-map-canvas').setView([10.595, -66.930], 12);
+        mapInstanceRef.current = map;
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '&copy; OpenStreetMap | Rescate La Guaira'
+        }).addTo(map);
+
+        // Render sectors
+        sectors.forEach((sec) => {
+          const info = getSectorStatusInfo(sec.status);
+          const bounds = [[sec.swLat, sec.swLng], [sec.neLat, sec.neLng]];
+
+          const rect = L.rectangle(bounds, {
+            color: info.hex,
+            weight: 3,
+            fillColor: info.hex,
+            fillOpacity: 0.25
+          }).addTo(map);
+
+          const assignedGrp = groups.find(g => g.id === sec.assignedGroupId);
+
+          rect.bindPopup(`
+            <div style="font-family: sans-serif; padding: 4px;">
+              <strong style="font-size: 14px; color: #1e293b;">${sec.name}</strong><br/>
+              <span style="display: inline-block; margin-top: 4px; padding: 2px 6px; border-radius: 4px; background: ${info.hex}; color: white; font-size: 11px; font-weight: bold;">
+                ${info.label}
+              </span>
+              <p style="margin: 6px 0; font-size: 12px; color: #475569;">
+                <strong>Equipo:</strong> ${assignedGrp ? assignedGrp.name : 'Sin asignar'}
+              </p>
+              <p style="margin: 4px 0; font-size: 11px; color: #64748b;">${sec.notes || ''}</p>
+            </div>
+          `);
+        });
+
+        // Render animal pins
+        animals.forEach((anim) => {
+          const marker = L.circleMarker([anim.lat, anim.lng], {
+            radius: 8,
+            fillColor: anim.status === 'Capturado' ? '#10b981' : anim.status === 'Buscando' ? '#f59e0b' : '#3b82f6',
+            color: '#ffffff',
+            weight: 2,
+            fillOpacity: 0.9
+          }).addTo(map);
+
+          marker.bindPopup(`
+            <div style="font-family: sans-serif; max-width: 200px;">
+              ${anim.photoUrl ? `<img src="${anim.photoUrl}" style="width:100%; height:100px; object-fit:cover; border-radius:6px; margin-bottom:6px;" />` : ''}
+              <strong style="font-size: 13px; color: #0f172a;">${anim.name} (${anim.species})</strong><br/>
+              <span style="font-size: 11px; color: #0284c7; font-weight: 600;">Estatus: ${anim.status}</span>
+              <p style="font-size: 11px; color: #334155; margin: 4px 0;">${anim.details}</p>
+              <small style="color: #94a3b8; font-size: 10px;">Reportado por: ${anim.reporterName}</small>
+            </div>
+          `);
+        });
+
+        // Add GPS user location if available
+        if (userLocation) {
+          L.marker([userLocation.lat, userLocation.lng])
+            .addTo(map)
+            .bindPopup('<b>📍 Tu Ubicación Actual (GPS)</b>')
+            .openPopup();
+          map.setView([userLocation.lat, userLocation.lng], 14);
+        }
+
+      } catch (err) {
+        console.error("Error al renderizar el mapa:", err);
+      }
+    }, 100);
 
     return () => {
+      clearTimeout(timer);
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
       }
     };
   }, [leafletLoaded, activeTab, sectors, animals, groups, userLocation]);
+
+  const handleAdminLogin = (e) => {
+    e.preventDefault();
+    // Requisito de login seguro de admin
+    if (loginUsername === 'derjaguer' && loginPassword === '.2411Patty..') {
+      setIsAdmin(true);
+      setShowLoginModal(false);
+      setLoginUsername('');
+      setLoginPassword('');
+      setLoginError('');
+    } else {
+      setLoginError('Usuario o contraseña incorrectos.');
+    }
+  };
+
+  const handleAdminLogout = () => {
+    setIsAdmin(false);
+  };
 
   const handleGetLocation = () => {
     if (!navigator.geolocation) {
@@ -276,11 +316,36 @@ export default function App() {
       },
       (err) => {
         console.error("Error obteniendo GPS:", err);
-        alert("No se pudo obtener la ubicación GPS. Verifica los permisos de tu dispositivo.");
+        alert("No se pudo obtener la ubicación GPS.");
         setIsLocating(false);
       },
       { enableHighAccuracy: true }
     );
+  };
+
+  // Delete Handlers
+  const handleDeleteSector = (id) => {
+    if (confirm("¿Estás seguro de que deseas eliminar esta cuadrícula?")) {
+      setSectors(sectors.filter(s => s.id !== id));
+    }
+  };
+
+  const handleDeleteGroup = (id) => {
+    if (confirm("¿Estás seguro de que deseas eliminar este grupo de trabajo?")) {
+      setGroups(groups.filter(g => g.id !== id));
+    }
+  };
+
+  const handleDeleteVolunteer = (id) => {
+    if (confirm("¿Estás seguro de que deseas eliminar este voluntario?")) {
+      setVolunteers(volunteers.filter(v => v.id !== id));
+    }
+  };
+
+  const handleDeleteAnimal = (id) => {
+    if (confirm("¿Estás seguro de que deseas eliminar este registro de animal?")) {
+      setAnimals(animals.filter(a => a.id !== id));
+    }
   };
 
   const counts = {
@@ -291,7 +356,7 @@ export default function App() {
     pendientes: sectors.filter(s => s.status === 'pendiente').length,
     alertaFuga: sectors.filter(s => s.status === 'alerta_fuga').length,
     
-    // Animals
+    // Animales
     capturados: animals.filter(a => a.status === 'Capturado').length,
     buscando: animals.filter(a => a.status === 'Buscando' || a.status === 'Avistado').length,
     libres: animals.filter(a => a.status === 'Libre en la zona').length,
@@ -313,24 +378,28 @@ export default function App() {
             </div>
           </div>
 
-          {/* Admin toggle & Live indicator */}
+          {/* Admin status & Login toggle */}
           <div className="flex items-center gap-3">
-            <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-full text-xs text-emerald-400">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              Sincronización en Vivo
-            </div>
-
-            <button
-              onClick={() => setIsAdmin(!isAdmin)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border ${
-                isAdmin 
-                  ? 'bg-amber-500/20 border-amber-500/50 text-amber-300 hover:bg-amber-500/30' 
-                  : 'bg-slate-700 border-slate-600 text-slate-300 hover:bg-slate-600'
-              }`}
-            >
-              <Shield className="w-4 h-4" />
-              {isAdmin ? 'Modo: Administrador' : 'Modo: Voluntario'}
-            </button>
+            {isAdmin ? (
+              <div className="flex items-center gap-2">
+                <span className="px-3 py-1 bg-amber-500/20 border border-amber-500/50 rounded-lg text-xs font-semibold text-amber-300 flex items-center gap-1.5">
+                  <Shield className="w-4 h-4 text-amber-400" /> Admin Activo
+                </span>
+                <button
+                  onClick={handleAdminLogout}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600/30 border border-rose-500/50 text-rose-300 hover:bg-rose-600/50 rounded-lg text-xs font-semibold transition-all"
+                >
+                  <LogOut className="w-3.5 h-3.5" /> Salir Admin
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowLoginModal(true)}
+                className="flex items-center gap-2 px-3.5 py-1.5 bg-slate-700 hover:bg-slate-600 border border-slate-600 text-slate-200 rounded-lg text-xs font-semibold transition-all"
+              >
+                <LogIn className="w-4 h-4 text-amber-400" /> Acceso Admin
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -408,7 +477,7 @@ export default function App() {
                   <Compass className="w-5 h-5 text-amber-400" /> Mapa del Estado La Guaira por Cuadrículas
                 </h2>
                 <p className="text-xs text-slate-400">
-                  Visualiza los sectores delimitados, la ubicación de los animales reportados y ubícate en tiempo real.
+                  Visualiza las cuadrículas delimitadas y las ubicaciones GPS reportadas.
                 </p>
               </div>
 
@@ -424,6 +493,7 @@ export default function App() {
 
                 <button
                   onClick={() => {
+                    setEditingAnimal(null);
                     setSelectedSectorForReport(sectors[0] || null);
                     setShowReportModal(true);
                   }}
@@ -434,11 +504,17 @@ export default function App() {
               </div>
             </div>
 
-            {/* Leaflet Canvas */}
-            <div className="bg-slate-800 rounded-xl p-2 border border-slate-700 shadow-xl relative min-h-[500px]">
+            {/* Leaflet Canvas Container */}
+            <div className="bg-slate-800 rounded-xl p-2 border border-slate-700 shadow-xl relative min-h-[520px]">
+              {!leafletLoaded && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 gap-2 bg-slate-800/90 rounded-lg z-20">
+                  <Navigation className="w-8 h-8 animate-spin text-amber-400" />
+                  <span className="text-xs">Cargando mapa interactivo GPS...</span>
+                </div>
+              )}
               <div id="leaflet-map-canvas" className="w-full h-[520px] rounded-lg z-0"></div>
 
-              {/* Map Color Legend */}
+              {/* Map Legend */}
               <div className="absolute bottom-4 right-4 bg-slate-900/90 border border-slate-700 backdrop-blur-md p-3 rounded-lg text-xs space-y-1.5 z-10 shadow-lg">
                 <p className="font-bold text-slate-300 text-[11px] border-b border-slate-800 pb-1 mb-1">Leyenda de Zonas</p>
                 <div className="flex items-center gap-2 text-slate-300"><span className="w-3 h-3 rounded bg-emerald-500"></span> Verde: Zona Limpia</div>
@@ -456,16 +532,19 @@ export default function App() {
             <div className="flex items-center justify-between bg-slate-800 p-4 rounded-xl border border-slate-700">
               <div>
                 <h2 className="text-base font-bold text-white flex items-center gap-2">
-                  <Layers className="w-5 h-5 text-amber-400" /> Estado de las Cuadrículas del Estado
+                  <Layers className="w-5 h-5 text-amber-400" /> Estado de las Cuadrículas
                 </h2>
                 <p className="text-xs text-slate-400">
-                  Cambia el estado de limpieza de cada zona a medida que los equipos avancen en la búsqueda y captura.
+                  Gestión y control de sectores asignados en La Guaira.
                 </p>
               </div>
 
               {isAdmin && (
                 <button
-                  onClick={() => setShowSectorModal(true)}
+                  onClick={() => {
+                    setEditingSector(null);
+                    setShowSectorModal(true);
+                  }}
                   className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-900 px-3.5 py-2 rounded-lg text-xs font-bold transition-all shadow-md"
                 >
                   <Plus className="w-4 h-4" /> Crear Nueva Cuadrícula
@@ -485,9 +564,32 @@ export default function App() {
                       {/* Card Header Status Indicator */}
                       <div className={`p-3 ${info.bg} flex items-center justify-between text-white`}>
                         <span className="font-bold text-sm drop-shadow">{sec.name}</span>
-                        <span className="text-[11px] font-extrabold uppercase bg-black/20 px-2 py-0.5 rounded backdrop-blur-sm">
-                          {info.label}
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[11px] font-extrabold uppercase bg-black/20 px-2 py-0.5 rounded backdrop-blur-sm">
+                            {info.label}
+                          </span>
+                          {isAdmin && (
+                            <div className="flex items-center gap-1 ml-1">
+                              <button
+                                title="Editar Sector"
+                                onClick={() => {
+                                  setEditingSector(sec);
+                                  setShowSectorModal(true);
+                                }}
+                                className="p-1 bg-black/30 hover:bg-black/50 rounded text-white"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                title="Eliminar Sector"
+                                onClick={() => handleDeleteSector(sec.id)}
+                                className="p-1 bg-rose-900/60 hover:bg-rose-900 rounded text-rose-200"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
 
                       <div className="p-4 space-y-3">
@@ -511,7 +613,7 @@ export default function App() {
 
                     {/* Status Update Controls */}
                     <div className="p-3 bg-slate-800/80 border-t border-slate-700/80 space-y-2">
-                      <p className="text-[11px] text-slate-400 font-semibold">Actualizar Estado de la Zona:</p>
+                      <p className="text-[11px] text-slate-400 font-semibold">Actualizar Estado:</p>
                       <div className="grid grid-cols-2 gap-1.5 text-[11px]">
                         <button
                           onClick={() => {
@@ -554,6 +656,7 @@ export default function App() {
 
                         <button
                           onClick={() => {
+                            setEditingAnimal(null);
                             setSelectedSectorForReport(sec);
                             setShowReportModal(true);
                           }}
@@ -576,16 +679,19 @@ export default function App() {
             <div className="flex items-center justify-between bg-slate-800 p-4 rounded-xl border border-slate-700">
               <div>
                 <h2 className="text-base font-bold text-white flex items-center gap-2">
-                  <Users className="w-5 h-5 text-amber-400" /> Grupos de Rescate Configurados
+                  <Users className="w-5 h-5 text-amber-400" /> Grupos de Trabajo
                 </h2>
                 <p className="text-xs text-slate-400">
-                  Asigna brigadas de voluntarios a sectores específicos para mantener el control ordenado.
+                  Organización de brigadas y equipos de respuesta.
                 </p>
               </div>
 
               {isAdmin && (
                 <button
-                  onClick={() => setShowGroupModal(true)}
+                  onClick={() => {
+                    setEditingGroup(null);
+                    setShowGroupModal(true);
+                  }}
                   className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-900 px-3.5 py-2 rounded-lg text-xs font-bold transition-all shadow-md"
                 >
                   <Plus className="w-4 h-4" /> Crear Nuevo Grupo
@@ -607,7 +713,30 @@ export default function App() {
                           <Phone className="w-3 h-3 text-emerald-400"/> Líder: {grp.leader} ({grp.phone})
                         </p>
                       </div>
-                      <span className="w-3 h-3 rounded-full" style={{ backgroundColor: grp.color }}></span>
+                      <div className="flex items-center gap-2">
+                        <span className="w-3 h-3 rounded-full" style={{ backgroundColor: grp.color }}></span>
+                        {isAdmin && (
+                          <div className="flex items-center gap-1">
+                            <button
+                              title="Editar Grupo"
+                              onClick={() => {
+                                setEditingGroup(grp);
+                                setShowGroupModal(true);
+                              }}
+                              className="p-1 bg-slate-700 hover:bg-slate-600 rounded text-amber-300"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              title="Eliminar Grupo"
+                              onClick={() => handleDeleteGroup(grp.id)}
+                              className="p-1 bg-rose-900/40 hover:bg-rose-900/80 rounded text-rose-300"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     <div className="space-y-2">
@@ -654,19 +783,24 @@ export default function App() {
             <div className="flex items-center justify-between bg-slate-800 p-4 rounded-xl border border-slate-700">
               <div>
                 <h2 className="text-base font-bold text-white flex items-center gap-2">
-                  <UserPlus className="w-5 h-5 text-amber-400" /> Directorio de Voluntarios Registrados
+                  <UserPlus className="w-5 h-5 text-amber-400" /> Directorio de Voluntarios
                 </h2>
                 <p className="text-xs text-slate-400">
-                  Lista completa del equipo con teléfonos de contacto directo y asignación de grupo.
+                  Registro detallado de rescatistas, veterinarios y apoyo logístico.
                 </p>
               </div>
 
-              <button
-                onClick={() => setShowVolunteerModal(true)}
-                className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-900 px-3.5 py-2 rounded-lg text-xs font-bold transition-all shadow-md"
-              >
-                <Plus className="w-4 h-4" /> Registrar Voluntario
-              </button>
+              {isAdmin && (
+                <button
+                  onClick={() => {
+                    setEditingVolunteer(null);
+                    setShowVolunteerModal(true);
+                  }}
+                  className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-900 px-3.5 py-2 rounded-lg text-xs font-bold transition-all shadow-md"
+                >
+                  <Plus className="w-4 h-4" /> Registrar Voluntario
+                </button>
+              )}
             </div>
 
             <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
@@ -678,6 +812,7 @@ export default function App() {
                       <th className="p-3.5">Rol / Especialidad</th>
                       <th className="p-3.5">Teléfono</th>
                       <th className="p-3.5">Grupo Asignado</th>
+                      {isAdmin && <th className="p-3.5 text-right">Acciones Admin</th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-700/60">
@@ -697,6 +832,29 @@ export default function App() {
                               {grp ? grp.name : 'Sin Grupo'}
                             </span>
                           </td>
+                          {isAdmin && (
+                            <td className="p-3.5 text-right">
+                              <div className="flex items-center justify-end gap-1">
+                                <button
+                                  title="Editar Voluntario"
+                                  onClick={() => {
+                                    setEditingVolunteer(vol);
+                                    setShowVolunteerModal(true);
+                                  }}
+                                  className="p-1 bg-slate-700 hover:bg-slate-600 text-amber-300 rounded"
+                                >
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  title="Eliminar Voluntario"
+                                  onClick={() => handleDeleteVolunteer(vol.id)}
+                                  className="p-1 bg-rose-900/40 hover:bg-rose-900 text-rose-300 rounded"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          )}
                         </tr>
                       );
                     })}
@@ -713,15 +871,16 @@ export default function App() {
             <div className="flex items-center justify-between bg-slate-800 p-4 rounded-xl border border-slate-700">
               <div>
                 <h2 className="text-base font-bold text-white flex items-center gap-2">
-                  <ImageIcon className="w-5 h-5 text-amber-400" /> Bitácora Fotográfica de Animales
+                  <ImageIcon className="w-5 h-5 text-amber-400" /> Registro Fotográfico
                 </h2>
                 <p className="text-xs text-slate-400">
-                  Registro visual de cada animal reportado con su estatus de búsqueda o captura.
+                  Bitácora visual de animales avistados, buscados, rescatados o fallecidos.
                 </p>
               </div>
 
               <button
                 onClick={() => {
+                  setEditingAnimal(null);
                   setSelectedSectorForReport(sectors[0] || null);
                   setShowReportModal(true);
                 }}
@@ -755,6 +914,28 @@ export default function App() {
                           <BadgeIcon className="w-3.5 h-3.5" />
                           {anim.status}
                         </span>
+
+                        {isAdmin && (
+                          <div className="absolute top-3 left-3 flex items-center gap-1">
+                            <button
+                              title="Editar Registro"
+                              onClick={() => {
+                                setEditingAnimal(anim);
+                                setShowReportModal(true);
+                              }}
+                              className="p-1.5 bg-slate-900/80 hover:bg-slate-900 text-amber-300 rounded-lg backdrop-blur-sm border border-slate-700"
+                            >
+                              <Edit3 className="w-4 h-4" />
+                            </button>
+                            <button
+                              title="Eliminar Registro"
+                              onClick={() => handleDeleteAnimal(anim.id)}
+                              className="p-1.5 bg-rose-900/80 hover:bg-rose-900 text-rose-200 rounded-lg backdrop-blur-sm border border-rose-700"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        )}
                       </div>
 
                       <div className="p-4 space-y-2">
@@ -802,13 +983,71 @@ export default function App() {
 
       </main>
 
-      {/* MODAL: REPORT ANIMAL */}
-      {showReportModal && (
+      {/* MODAL: ADMIN LOGIN */}
+      {showLoginModal && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-800 border border-slate-700 rounded-xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+          <div className="bg-slate-800 border border-slate-700 rounded-xl max-w-sm w-full p-5 space-y-4 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-700 pb-3">
               <h3 className="font-bold text-white text-base flex items-center gap-2">
-                <Plus className="w-5 h-5 text-amber-400" /> Registrar Avistamiento / Captura
+                <Lock className="w-5 h-5 text-amber-400" /> Autenticación Administrador
+              </h3>
+              <button onClick={() => setShowLoginModal(false)} className="text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAdminLogin} className="space-y-3 text-xs">
+              {loginError && (
+                <div className="p-2 bg-rose-500/20 border border-rose-500/50 rounded text-rose-300 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  {loginError}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-slate-300 mb-1 font-semibold">Usuario de Administrador</label>
+                <input
+                  required
+                  type="text"
+                  value={loginUsername}
+                  onChange={(e) => setLoginUsername(e.target.value)}
+                  placeholder="Escribe tu usuario"
+                  className="w-full bg-slate-900 border border-slate-700 rounded p-2.5 text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-300 mb-1 font-semibold">Contraseña</label>
+                <input
+                  required
+                  type="password"
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  placeholder="Escribe tu contraseña"
+                  className="w-full bg-slate-900 border border-slate-700 rounded p-2.5 text-white"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2">
+                <button type="button" onClick={() => setShowLoginModal(false)} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded font-semibold text-slate-200">
+                  Cancelar
+                </button>
+                <button type="submit" className="px-4 py-2 bg-amber-500 hover:bg-amber-400 rounded font-bold text-slate-900">
+                  Ingresar como Admin
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: REPORT / EDIT ANIMAL */}
+      {showReportModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-800 border border-slate-700 rounded-xl max-w-md w-full p-5 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-700 pb-3">
+              <h3 className="font-bold text-white text-base flex items-center gap-2">
+                <Plus className="w-5 h-5 text-amber-400" /> {editingAnimal ? 'Editar Registro de Animal' : 'Registrar Avistamiento / Captura'}
               </h3>
               <button onClick={() => setShowReportModal(false)} className="text-slate-400 hover:text-white">
                 <X className="w-5 h-5" />
@@ -818,32 +1057,36 @@ export default function App() {
             <form onSubmit={(e) => {
               e.preventDefault();
               const fd = new FormData(e.target);
-              const newAnim = {
-                id: 'anim-' + Date.now(),
+              const animalData = {
+                id: editingAnimal ? editingAnimal.id : ('anim-' + Date.now()),
                 name: fd.get('name') || 'Sin Nombre',
                 species: fd.get('species'),
                 status: fd.get('status'),
                 sectorId: fd.get('sectorId'),
                 reporterName: fd.get('reporterName') || 'Voluntario',
-                date: new Date().toISOString().replace('T', ' ').substring(0, 16),
+                date: editingAnimal ? editingAnimal.date : new Date().toISOString().replace('T', ' ').substring(0, 16),
                 lat: parseFloat(fd.get('lat')) || (selectedSectorForReport ? selectedSectorForReport.swLat + 0.01 : 10.600),
                 lng: parseFloat(fd.get('lng')) || (selectedSectorForReport ? selectedSectorForReport.swLng + 0.01 : -66.900),
                 photoUrl: fd.get('photoUrl') || '',
                 details: fd.get('details') || ''
               };
 
-              setAnimals([newAnim, ...animals]);
+              if (editingAnimal) {
+                setAnimals(animals.map(a => a.id === editingAnimal.id ? animalData : a));
+              } else {
+                setAnimals([animalData, ...animals]);
+              }
               setShowReportModal(false);
             }} className="space-y-3 text-xs">
               <div>
                 <label className="block text-slate-300 mb-1 font-semibold">Identificación / Descripción breve</label>
-                <input required name="name" placeholder="Ej. Mestizo Marrón sin collar" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
+                <input required name="name" defaultValue={editingAnimal?.name || ''} placeholder="Ej. Mestizo Marrón sin collar" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block text-slate-300 mb-1 font-semibold">Especie</label>
-                  <select name="species" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white">
+                  <select name="species" defaultValue={editingAnimal?.species || 'Perro'} className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white">
                     <option value="Perro">Perro</option>
                     <option value="Gato">Gato</option>
                     <option value="Ave">Ave</option>
@@ -853,7 +1096,7 @@ export default function App() {
 
                 <div>
                   <label className="block text-slate-300 mb-1 font-semibold">Estatus Inicial</label>
-                  <select name="status" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white">
+                  <select name="status" defaultValue={editingAnimal?.status || 'Avistado'} className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white">
                     <option value="Avistado">Avistado</option>
                     <option value="Buscando">Buscando</option>
                     <option value="Capturado">Capturado / Rescatado</option>
@@ -865,7 +1108,7 @@ export default function App() {
 
               <div>
                 <label className="block text-slate-300 mb-1 font-semibold">Cuadrícula / Sector</label>
-                <select name="sectorId" defaultValue={selectedSectorForReport?.id} className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white">
+                <select name="sectorId" defaultValue={editingAnimal?.sectorId || selectedSectorForReport?.id || sectors[0]?.id} className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white">
                   {sectors.map(s => (
                     <option key={s.id} value={s.id}>{s.name}</option>
                   ))}
@@ -874,28 +1117,28 @@ export default function App() {
 
               <div>
                 <label className="block text-slate-300 mb-1 font-semibold">URL de Foto (Opcional)</label>
-                <input name="photoUrl" placeholder="https://..." className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
+                <input name="photoUrl" defaultValue={editingAnimal?.photoUrl || ''} placeholder="https://..." className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block text-slate-300 mb-1 font-semibold">Latitud GPS</label>
-                  <input name="lat" step="any" defaultValue={userLocation?.lat || 10.600} className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
+                  <input name="lat" step="any" defaultValue={editingAnimal?.lat || userLocation?.lat || 10.600} className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
                 </div>
                 <div>
                   <label className="block text-slate-300 mb-1 font-semibold">Longitud GPS</label>
-                  <input name="lng" step="any" defaultValue={userLocation?.lng || -66.900} className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
+                  <input name="lng" step="any" defaultValue={editingAnimal?.lng || userLocation?.lng || -66.900} className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
                 </div>
               </div>
 
               <div>
                 <label className="block text-slate-300 mb-1 font-semibold">Nombre del Rescatista / Reportero</label>
-                <input name="reporterName" placeholder="Tu nombre" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
+                <input name="reporterName" defaultValue={editingAnimal?.reporterName || ''} placeholder="Tu nombre" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
               </div>
 
               <div>
                 <label className="block text-slate-300 mb-1 font-semibold">Detalles y Estado de Salud</label>
-                <textarea name="details" rows="2" placeholder="Desnutrición, deshidratado, comportamiento agredido..." className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white"></textarea>
+                <textarea name="details" rows="2" defaultValue={editingAnimal?.details || ''} placeholder="Desnutrición, deshidratado, comportamiento asustado..." className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white"></textarea>
               </div>
 
               <div className="pt-2 flex justify-end gap-2">
@@ -903,7 +1146,7 @@ export default function App() {
                   Cancelar
                 </button>
                 <button type="submit" className="px-4 py-2 bg-amber-500 hover:bg-amber-400 rounded font-bold text-slate-900">
-                  Guardar Reporte
+                  {editingAnimal ? 'Actualizar Registro' : 'Guardar Reporte'}
                 </button>
               </div>
             </form>
@@ -911,13 +1154,13 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL: CREATE VOLUNTEER */}
+      {/* MODAL: CREATE / EDIT VOLUNTEER */}
       {showVolunteerModal && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-800 border border-slate-700 rounded-xl max-w-md w-full p-5 space-y-4 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-700 pb-3">
               <h3 className="font-bold text-white text-base flex items-center gap-2">
-                <UserPlus className="w-5 h-5 text-amber-400" /> Registrar Nuevo Voluntario
+                <UserPlus className="w-5 h-5 text-amber-400" /> {editingVolunteer ? 'Editar Voluntario' : 'Registrar Nuevo Voluntario'}
               </h3>
               <button onClick={() => setShowVolunteerModal(false)} className="text-slate-400 hover:text-white">
                 <X className="w-5 h-5" />
@@ -927,34 +1170,39 @@ export default function App() {
             <form onSubmit={(e) => {
               e.preventDefault();
               const fd = new FormData(e.target);
-              const newVol = {
-                id: 'vol-' + Date.now(),
+              const volData = {
+                id: editingVolunteer ? editingVolunteer.id : ('vol-' + Date.now()),
                 name: fd.get('name'),
                 role: fd.get('role'),
                 phone: fd.get('phone'),
                 groupId: fd.get('groupId')
               };
-              setVolunteers([...volunteers, newVol]);
+
+              if (editingVolunteer) {
+                setVolunteers(volunteers.map(v => v.id === editingVolunteer.id ? volData : v));
+              } else {
+                setVolunteers([...volunteers, volData]);
+              }
               setShowVolunteerModal(false);
             }} className="space-y-3 text-xs">
               <div>
                 <label className="block text-slate-300 mb-1 font-semibold">Nombre Completo</label>
-                <input required name="name" placeholder="Ej. Ana Lucía Pérez" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
+                <input required name="name" defaultValue={editingVolunteer?.name || ''} placeholder="Ej. Ana Lucía Pérez" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
               </div>
 
               <div>
                 <label className="block text-slate-300 mb-1 font-semibold">Rol / Especialidad</label>
-                <input required name="role" placeholder="Ej. Veterinario, Capturista, Conductor" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
+                <input required name="role" defaultValue={editingVolunteer?.role || ''} placeholder="Ej. Veterinario, Capturista, Conductor" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
               </div>
 
               <div>
                 <label className="block text-slate-300 mb-1 font-semibold">Teléfono de Contacto</label>
-                <input required name="phone" placeholder="+58 412 0000000" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
+                <input required name="phone" defaultValue={editingVolunteer?.phone || ''} placeholder="+58 412 0000000" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
               </div>
 
               <div>
                 <label className="block text-slate-300 mb-1 font-semibold">Grupo Asignado</label>
-                <select name="groupId" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white">
+                <select name="groupId" defaultValue={editingVolunteer?.groupId || ''} className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white">
                   <option value="">Sin Grupo Asignado</option>
                   {groups.map(g => (
                     <option key={g.id} value={g.id}>{g.name}</option>
@@ -967,7 +1215,7 @@ export default function App() {
                   Cancelar
                 </button>
                 <button type="submit" className="px-4 py-2 bg-amber-500 hover:bg-amber-400 rounded font-bold text-slate-900">
-                  Registrar
+                  {editingVolunteer ? 'Guardar Cambios' : 'Registrar'}
                 </button>
               </div>
             </form>
@@ -975,13 +1223,13 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL: CREATE GROUP */}
+      {/* MODAL: CREATE / EDIT GROUP */}
       {showGroupModal && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-800 border border-slate-700 rounded-xl max-w-md w-full p-5 space-y-4 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-700 pb-3">
               <h3 className="font-bold text-white text-base flex items-center gap-2">
-                <Users className="w-5 h-5 text-amber-400" /> Crear Nuevo Grupo de Trabajo
+                <Users className="w-5 h-5 text-amber-400" /> {editingGroup ? 'Editar Grupo de Trabajo' : 'Crear Nuevo Grupo de Trabajo'}
               </h3>
               <button onClick={() => setShowGroupModal(false)} className="text-slate-400 hover:text-white">
                 <X className="w-5 h-5" />
@@ -991,34 +1239,39 @@ export default function App() {
             <form onSubmit={(e) => {
               e.preventDefault();
               const fd = new FormData(e.target);
-              const newGrp = {
-                id: 'grp-' + Date.now(),
+              const grpData = {
+                id: editingGroup ? editingGroup.id : ('grp-' + Date.now()),
                 name: fd.get('name'),
                 leader: fd.get('leader'),
                 phone: fd.get('phone'),
                 color: fd.get('color') || '#3b82f6'
               };
-              setGroups([...groups, newGrp]);
+
+              if (editingGroup) {
+                setGroups(groups.map(g => g.id === editingGroup.id ? grpData : g));
+              } else {
+                setGroups([...groups, grpData]);
+              }
               setShowGroupModal(false);
             }} className="space-y-3 text-xs">
               <div>
                 <label className="block text-slate-300 mb-1 font-semibold">Nombre del Equipo / Brigada</label>
-                <input required name="name" placeholder="Ej. Brigada de Rescate Caraballeda" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
+                <input required name="name" defaultValue={editingGroup?.name || ''} placeholder="Ej. Brigada de Rescate Caraballeda" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
               </div>
 
               <div>
                 <label className="block text-slate-300 mb-1 font-semibold">Líder / Coordinador</label>
-                <input required name="leader" placeholder="Nombre del líder" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
+                <input required name="leader" defaultValue={editingGroup?.leader || ''} placeholder="Nombre del líder" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
               </div>
 
               <div>
                 <label className="block text-slate-300 mb-1 font-semibold">Teléfono del Líder</label>
-                <input required name="phone" placeholder="+58 414 0000000" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
+                <input required name="phone" defaultValue={editingGroup?.phone || ''} placeholder="+58 414 0000000" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
               </div>
 
               <div>
                 <label className="block text-slate-300 mb-1 font-semibold">Color Identificador</label>
-                <input type="color" name="color" defaultValue="#3b82f6" className="w-full bg-slate-900 border border-slate-700 rounded h-10 p-1 cursor-pointer" />
+                <input type="color" name="color" defaultValue={editingGroup?.color || '#3b82f6'} className="w-full bg-slate-900 border border-slate-700 rounded h-10 p-1 cursor-pointer" />
               </div>
 
               <div className="pt-2 flex justify-end gap-2">
@@ -1026,7 +1279,7 @@ export default function App() {
                   Cancelar
                 </button>
                 <button type="submit" className="px-4 py-2 bg-amber-500 hover:bg-amber-400 rounded font-bold text-slate-900">
-                  Crear Equipo
+                  {editingGroup ? 'Guardar Cambios' : 'Crear Equipo'}
                 </button>
               </div>
             </form>
@@ -1034,13 +1287,13 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL: CREATE SECTOR */}
+      {/* MODAL: CREATE / EDIT SECTOR */}
       {showSectorModal && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-800 border border-slate-700 rounded-xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+          <div className="bg-slate-800 border border-slate-700 rounded-xl max-w-md w-full p-5 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-700 pb-3">
               <h3 className="font-bold text-white text-base flex items-center gap-2">
-                <Layers className="w-5 h-5 text-amber-400" /> Crear Nueva Cuadrícula
+                <Layers className="w-5 h-5 text-amber-400" /> {editingSector ? 'Editar Cuadrícula / Sector' : 'Crear Nueva Cuadrícula'}
               </h3>
               <button onClick={() => setShowSectorModal(false)} className="text-slate-400 hover:text-white">
                 <X className="w-5 h-5" />
@@ -1050,10 +1303,10 @@ export default function App() {
             <form onSubmit={(e) => {
               e.preventDefault();
               const fd = new FormData(e.target);
-              const newSec = {
-                id: 'sec-' + Date.now(),
+              const secData = {
+                id: editingSector ? editingSector.id : ('sec-' + Date.now()),
                 name: fd.get('name'),
-                status: 'pendiente',
+                status: editingSector ? editingSector.status : 'pendiente',
                 assignedGroupId: fd.get('assignedGroupId'),
                 swLat: parseFloat(fd.get('swLat')),
                 swLng: parseFloat(fd.get('swLng')),
@@ -1061,39 +1314,44 @@ export default function App() {
                 neLng: parseFloat(fd.get('neLng')),
                 notes: fd.get('notes')
               };
-              setSectors([...sectors, newSec]);
+
+              if (editingSector) {
+                setSectors(sectors.map(s => s.id === editingSector.id ? secData : s));
+              } else {
+                setSectors([...sectors, secData]);
+              }
               setShowSectorModal(false);
             }} className="space-y-3 text-xs">
               <div>
                 <label className="block text-slate-300 mb-1 font-semibold">Nombre del Sector / Cuadrícula</label>
-                <input required name="name" placeholder="Ej. Cuadrícula E1 - Naiguatá Este" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
+                <input required name="name" defaultValue={editingSector?.name || ''} placeholder="Ej. Cuadrícula E1 - Naiguatá Este" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block text-slate-300 mb-1 font-semibold">Latitud Sudoeste (SW)</label>
-                  <input name="swLat" step="any" defaultValue="10.600" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
+                  <input name="swLat" step="any" defaultValue={editingSector?.swLat ?? "10.600"} className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
                 </div>
                 <div>
                   <label className="block text-slate-300 mb-1 font-semibold">Longitud Sudoeste (SW)</label>
-                  <input name="swLng" step="any" defaultValue="-66.800" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
+                  <input name="swLng" step="any" defaultValue={editingSector?.swLng ?? "-66.800"} className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block text-slate-300 mb-1 font-semibold">Latitud Noreste (NE)</label>
-                  <input name="neLat" step="any" defaultValue="10.630" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
+                  <input name="neLat" step="any" defaultValue={editingSector?.neLat ?? "10.630"} className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
                 </div>
                 <div>
                   <label className="block text-slate-300 mb-1 font-semibold">Longitud Noreste (NE)</label>
-                  <input name="neLng" step="any" defaultValue="-66.750" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
+                  <input name="neLng" step="any" defaultValue={editingSector?.neLng ?? "-66.750"} className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
                 </div>
               </div>
 
               <div>
                 <label className="block text-slate-300 mb-1 font-semibold">Asignar Grupo Inicial</label>
-                <select name="assignedGroupId" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white">
+                <select name="assignedGroupId" defaultValue={editingSector?.assignedGroupId || ''} className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white">
                   <option value="">Sin Grupo Asignado</option>
                   {groups.map(g => (
                     <option key={g.id} value={g.id}>{g.name}</option>
@@ -1103,7 +1361,7 @@ export default function App() {
 
               <div>
                 <label className="block text-slate-300 mb-1 font-semibold">Instrucciones o Notas</label>
-                <textarea name="notes" rows="2" placeholder="Puntos de referencia, escombros principales..." className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white"></textarea>
+                <textarea name="notes" rows="2" defaultValue={editingSector?.notes || ''} placeholder="Puntos de referencia, escombros principales..." className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white"></textarea>
               </div>
 
               <div className="pt-2 flex justify-end gap-2">
@@ -1111,7 +1369,7 @@ export default function App() {
                   Cancelar
                 </button>
                 <button type="submit" className="px-4 py-2 bg-amber-500 hover:bg-amber-400 rounded font-bold text-slate-900">
-                  Crear Sector
+                  {editingSector ? 'Guardar Cambios' : 'Crear Sector'}
                 </button>
               </div>
             </form>
