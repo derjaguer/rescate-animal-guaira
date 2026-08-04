@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+importimport React, { useState, useEffect, useRef } from 'react';
 import { 
   Plus, Users, Map as MapIcon, Image as ImageIcon, CheckCircle, AlertTriangle, 
   Shield, MapPin, X, Navigation, UserPlus, Phone, Heart, Search, ShieldAlert, 
   CheckCircle2, AlertOctagon, HelpCircle, Eye, Compass, Layers, Edit3, Trash2, 
-  Camera, Lock, LogIn, LogOut, Check, AlertCircle, Mail, AtSign, Globe, RefreshCw
+  Camera, Lock, LogIn, LogOut, Check, AlertCircle, Mail, AtSign, Globe, RefreshCw,
+  Square, MousePointer
 } from 'lucide-react';
 
 const PRESET_LA_GUAIRA_SECTORS = [
@@ -124,6 +125,11 @@ export default function App() {
 
   const [activeTab, setActiveTab] = useState('mapa');
 
+  // Interactive Drawing Mode States
+  const [isDrawingSector, setIsDrawingSector] = useState(false);
+  const [drawStartPoint, setDrawStartPoint] = useState(null);
+  const [drawCurrentPoint, setDrawCurrentPoint] = useState(null);
+
   // Persistence via LocalStorage
   const [volunteers, setVolunteers] = useState(() => {
     const saved = localStorage.getItem('rag_volunteers');
@@ -178,6 +184,7 @@ export default function App() {
 
   const [showSectorModal, setShowSectorModal] = useState(false);
   const [editingSector, setEditingSector] = useState(null);
+  const [prefilledSectorBounds, setPrefilledSectorBounds] = useState(null);
 
   const [selectedSectorForReport, setSelectedSectorForReport] = useState(null);
 
@@ -235,7 +242,6 @@ export default function App() {
       const container = document.getElementById('leaflet-map-canvas');
       if (!container || !window.L) return;
 
-      // Reset leaflet internal container ID if re-mounting
       if (container._leaflet_id) {
         container._leaflet_id = null;
       }
@@ -263,12 +269,47 @@ export default function App() {
           attribution: '&copy; OpenStreetMap | Rescate La Guaira'
         }).addTo(map);
 
-        // Force resize calculation after DOM layout
         setTimeout(() => {
           if (map) {
             map.invalidateSize();
           }
         }, 200);
+
+        // Map Click & MouseMove listeners for Direct Drawing Mode
+        map.on('click', (e) => {
+          if (!isDrawingSector) return;
+
+          if (!drawStartPoint) {
+            setDrawStartPoint(e.latlng);
+          } else {
+            // Second Click: Complete rectangle drawing
+            const endPoint = e.latlng;
+            const swLat = Math.min(drawStartPoint.lat, endPoint.lat);
+            const swLng = Math.min(drawStartPoint.lng, endPoint.lng);
+            const neLat = Math.max(drawStartPoint.lat, endPoint.lat);
+            const neLng = Math.max(drawStartPoint.lng, endPoint.lng);
+
+            setPrefilledSectorBounds({ swLat, swLng, neLat, neLng });
+            setEditingSector(null);
+            setIsDrawingSector(false);
+            setDrawStartPoint(null);
+            setDrawCurrentPoint(null);
+            setShowSectorModal(true);
+          }
+        });
+
+        map.on('mousemove', (e) => {
+          if (isDrawingSector && drawStartPoint) {
+            setDrawCurrentPoint(e.latlng);
+          }
+        });
+
+        // Set cursor style
+        if (isDrawingSector) {
+          container.style.cursor = 'crosshair';
+        } else {
+          container.style.cursor = '';
+        }
 
         // Render sectors
         sectors.forEach((sec) => {
@@ -302,6 +343,25 @@ export default function App() {
             </div>
           `);
         });
+
+        // Render live drawing rectangle preview
+        if (isDrawingSector && drawStartPoint) {
+          L.circleMarker(drawStartPoint, { radius: 6, color: '#f59e0b', fillColor: '#f59e0b', fillOpacity: 1 }).addTo(map);
+
+          if (drawCurrentPoint) {
+            const previewBounds = [
+              [Math.min(drawStartPoint.lat, drawCurrentPoint.lat), Math.min(drawStartPoint.lng, drawCurrentPoint.lng)],
+              [Math.max(drawStartPoint.lat, drawCurrentPoint.lat), Math.max(drawStartPoint.lng, drawCurrentPoint.lng)]
+            ];
+            L.rectangle(previewBounds, {
+              color: '#f59e0b',
+              weight: 2,
+              dashArray: '6, 6',
+              fillColor: '#f59e0b',
+              fillOpacity: 0.35
+            }).addTo(map);
+          }
+        }
 
         // Render animal pins
         animals.forEach((anim) => {
@@ -350,7 +410,7 @@ export default function App() {
         mapInstanceRef.current = null;
       }
     };
-  }, [leafletLoaded, activeTab, sectors, animals, groups, userLocation]);
+  }, [leafletLoaded, activeTab, sectors, animals, groups, userLocation, isDrawingSector, drawStartPoint, drawCurrentPoint]);
 
   const handleAdminLogin = (e) => {
     e.preventDefault();
@@ -367,6 +427,7 @@ export default function App() {
 
   const handleAdminLogout = () => {
     setIsAdmin(false);
+    setIsDrawingSector(false);
   };
 
   const handleResetData = () => {
@@ -405,7 +466,6 @@ export default function App() {
     );
   };
 
-  // Delete Handlers
   const handleDeleteSector = (id) => {
     if (confirm("¿Estás seguro de que deseas eliminar esta cuadrícula?")) {
       setSectors(sectors.filter(s => s.id !== id));
@@ -573,7 +633,31 @@ export default function App() {
                 </p>
               </div>
 
-              <div className="flex items-center gap-2 w-full sm:w-auto">
+              <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                {isAdmin && (
+                  <button
+                    onClick={() => {
+                      if (isDrawingSector) {
+                        setIsDrawingSector(false);
+                        setDrawStartPoint(null);
+                        setDrawCurrentPoint(null);
+                      } else {
+                        setIsDrawingSector(true);
+                        setDrawStartPoint(null);
+                        setDrawCurrentPoint(null);
+                      }
+                    }}
+                    className={`flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold transition-all shadow-md ${
+                      isDrawingSector 
+                        ? 'bg-rose-600 hover:bg-rose-500 text-white animate-pulse' 
+                        : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                    }`}
+                  >
+                    <Square className="w-4 h-4" />
+                    {isDrawingSector ? '❌ Cancelar Dibujo' : '✏️ Dibujar Cuadrícula'}
+                  </button>
+                )}
+
                 <button
                   onClick={handleGetLocation}
                   disabled={isLocating}
@@ -595,6 +679,30 @@ export default function App() {
                 </button>
               </div>
             </div>
+
+            {/* Drawing Mode Instruction Banner */}
+            {isDrawingSector && (
+              <div className="p-3 bg-amber-500/20 border border-amber-500/50 rounded-xl text-amber-300 text-xs flex items-center justify-between gap-2 shadow-lg animate-pulse">
+                <div className="flex items-center gap-2">
+                  <MousePointer className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span>
+                    {!drawStartPoint 
+                      ? 'Navega en el mapa y haz clic en la PRIMERA ESQUINA de la nueva cuadrícula.' 
+                      : 'Mueve el ratón y haz clic en la ESQUINA OPUESTA para completar la cuadrícula.'}
+                  </span>
+                </div>
+                <button 
+                  onClick={() => {
+                    setIsDrawingSector(false);
+                    setDrawStartPoint(null);
+                    setDrawCurrentPoint(null);
+                  }}
+                  className="px-2 py-1 bg-amber-500 text-slate-900 font-bold rounded text-[11px]"
+                >
+                  Cancelar
+                </button>
+              </div>
+            )}
 
             {/* Leaflet Canvas Container */}
             <div className="bg-slate-800 rounded-xl p-2 border border-slate-700 shadow-xl relative min-h-[520px]">
@@ -635,6 +743,7 @@ export default function App() {
                 <button
                   onClick={() => {
                     setEditingSector(null);
+                    setPrefilledSectorBounds(null);
                     setShowSectorModal(true);
                   }}
                   className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-900 px-3.5 py-2 rounded-lg text-xs font-bold transition-all shadow-md"
@@ -666,6 +775,7 @@ export default function App() {
                                 title="Editar Sector"
                                 onClick={() => {
                                   setEditingSector(sec);
+                                  setPrefilledSectorBounds(null);
                                   setShowSectorModal(true);
                                 }}
                                 className="p-1 bg-black/30 hover:bg-black/50 rounded text-white"
@@ -1454,7 +1564,7 @@ export default function App() {
               <h3 className="font-bold text-white text-base flex items-center gap-2">
                 <Layers className="w-5 h-5 text-amber-400" /> {editingSector ? 'Editar Cuadrícula / Sector' : 'Crear Nueva Cuadrícula'}
               </h3>
-              <button onClick={() => setShowSectorModal(false)} className="text-slate-400 hover:text-white">
+              <button onClick={() => { setShowSectorModal(false); setPrefilledSectorBounds(null); }} className="text-slate-400 hover:text-white">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -1480,6 +1590,7 @@ export default function App() {
                 setSectors([...sectors, secData]);
               }
               setShowSectorModal(false);
+              setPrefilledSectorBounds(null);
             }} className="space-y-3 text-xs">
               <div>
                 <label className="block text-slate-300 mb-1 font-semibold">Nombre del Sector / Cuadrícula</label>
@@ -1489,22 +1600,22 @@ export default function App() {
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block text-slate-300 mb-1 font-semibold">Latitud Sudoeste (SW)</label>
-                  <input name="swLat" step="any" defaultValue={editingSector?.swLat ?? "10.600"} className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
+                  <input name="swLat" step="any" defaultValue={editingSector?.swLat ?? prefilledSectorBounds?.swLat ?? "10.600"} className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white font-mono" />
                 </div>
                 <div>
                   <label className="block text-slate-300 mb-1 font-semibold">Longitud Sudoeste (SW)</label>
-                  <input name="swLng" step="any" defaultValue={editingSector?.swLng ?? "-66.800"} className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
+                  <input name="swLng" step="any" defaultValue={editingSector?.swLng ?? prefilledSectorBounds?.swLng ?? "-66.800"} className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white font-mono" />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block text-slate-300 mb-1 font-semibold">Latitud Noreste (NE)</label>
-                  <input name="neLat" step="any" defaultValue={editingSector?.neLat ?? "10.630"} className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
+                  <input name="neLat" step="any" defaultValue={editingSector?.neLat ?? prefilledSectorBounds?.neLat ?? "10.630"} className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white font-mono" />
                 </div>
                 <div>
                   <label className="block text-slate-300 mb-1 font-semibold">Longitud Noreste (NE)</label>
-                  <input name="neLng" step="any" defaultValue={editingSector?.neLng ?? "-66.750"} className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
+                  <input name="neLng" step="any" defaultValue={editingSector?.neLng ?? prefilledSectorBounds?.neLng ?? "-66.750"} className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white font-mono" />
                 </div>
               </div>
 
@@ -1524,7 +1635,7 @@ export default function App() {
               </div>
 
               <div className="pt-2 flex justify-end gap-2">
-                <button type="button" onClick={() => setShowSectorModal(false)} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded font-semibold text-slate-200">
+                <button type="button" onClick={() => { setShowSectorModal(false); setPrefilledSectorBounds(null); }} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded font-semibold text-slate-200">
                   Cancelar
                 </button>
                 <button type="submit" className="px-4 py-2 bg-amber-500 hover:bg-amber-400 rounded font-bold text-slate-900">
