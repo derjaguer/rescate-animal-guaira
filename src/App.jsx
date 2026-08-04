@@ -1,4 +1,4 @@
-importimport React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Plus, Users, Map as MapIcon, Image as ImageIcon, CheckCircle, AlertTriangle, 
   Shield, MapPin, X, Navigation, UserPlus, Phone, Heart, Search, ShieldAlert, 
@@ -125,12 +125,12 @@ export default function App() {
 
   const [activeTab, setActiveTab] = useState('mapa');
 
-  // Interactive Drawing Mode States
+  // Modo de dibujo de cuadrículas interactivas
   const [isDrawingSector, setIsDrawingSector] = useState(false);
   const [drawStartPoint, setDrawStartPoint] = useState(null);
   const [drawCurrentPoint, setDrawCurrentPoint] = useState(null);
 
-  // Persistence via LocalStorage
+  // Persistencia mediante LocalStorage
   const [volunteers, setVolunteers] = useState(() => {
     const saved = localStorage.getItem('rag_volunteers');
     return saved ? JSON.parse(saved) : INITIAL_VOLUNTEERS;
@@ -151,7 +151,7 @@ export default function App() {
     return saved ? JSON.parse(saved) : INITIAL_ANIMALS;
   });
 
-  // Sync to localStorage
+  // Sincronización a localStorage
   useEffect(() => {
     localStorage.setItem('rag_volunteers', JSON.stringify(volunteers));
   }, [volunteers]);
@@ -172,7 +172,7 @@ export default function App() {
     localStorage.setItem('rag_isAdmin', isAdmin ? 'true' : 'false');
   }, [isAdmin]);
 
-  // Modals & Edit States
+  // Estados de Modales y Edición
   const [showReportModal, setShowReportModal] = useState(false);
   const [editingAnimal, setEditingAnimal] = useState(null);
 
@@ -188,13 +188,13 @@ export default function App() {
 
   const [selectedSectorForReport, setSelectedSectorForReport] = useState(null);
 
-  // Leaflet map state
+  // Referencias del mapa Leaflet
   const mapInstanceRef = useRef(null);
   const [leafletLoaded, setLeafletLoaded] = useState(false);
   const [userLocation, setUserLocation] = useState(null);
   const [isLocating, setIsLocating] = useState(false);
 
-  // Inject Leaflet CSS & JS dynamically with polling fallback
+  // Inyección dinámica de CSS y JS para Leaflet con comprobación continua
   useEffect(() => {
     const checkL = () => {
       if (window.L) {
@@ -232,7 +232,7 @@ export default function App() {
     checkL();
   }, []);
 
-  // Initialize and update Leaflet Map
+  // Inicialización y actualización del mapa interactivo
   useEffect(() => {
     if (!leafletLoaded || activeTab !== 'mapa') return;
 
@@ -250,7 +250,7 @@ export default function App() {
         try {
           mapInstanceRef.current.remove();
         } catch (e) {
-          console.warn("Leaflet cleanup warning:", e);
+          console.warn("Aviso al limpiar Leaflet:", e);
         }
         mapInstanceRef.current = null;
       }
@@ -275,14 +275,14 @@ export default function App() {
           }
         }, 200);
 
-        // Map Click & MouseMove listeners for Direct Drawing Mode
+        // Eventos de mapa para el modo de dibujo de cuadrículas
         map.on('click', (e) => {
           if (!isDrawingSector) return;
 
           if (!drawStartPoint) {
             setDrawStartPoint(e.latlng);
           } else {
-            // Second Click: Complete rectangle drawing
+            // Segundo Clic: Finalizar trazo de cuadrícula
             const endPoint = e.latlng;
             const swLat = Math.min(drawStartPoint.lat, endPoint.lat);
             const swLng = Math.min(drawStartPoint.lng, endPoint.lng);
@@ -304,14 +304,14 @@ export default function App() {
           }
         });
 
-        // Set cursor style
+        // Aplicar puntero según modo de dibujo
         if (isDrawingSector) {
           container.style.cursor = 'crosshair';
         } else {
           container.style.cursor = '';
         }
 
-        // Render sectors
+        // Renderizado de sectores/cuadrículas
         sectors.forEach((sec) => {
           const info = getSectorStatusInfo(sec.status);
           const swLat = parseFloat(sec.swLat) || 10.600;
@@ -344,7 +344,7 @@ export default function App() {
           `);
         });
 
-        // Render live drawing rectangle preview
+        // Previsualización en vivo de la cuadrícula trazándose
         if (isDrawingSector && drawStartPoint) {
           L.circleMarker(drawStartPoint, { radius: 6, color: '#f59e0b', fillColor: '#f59e0b', fillOpacity: 1 }).addTo(map);
 
@@ -363,7 +363,7 @@ export default function App() {
           }
         }
 
-        // Render animal pins
+        // Renderizado de marcadores de animales
         animals.forEach((anim) => {
           const lat = parseFloat(anim.lat) || 10.600;
           const lng = parseFloat(anim.lng) || -66.900;
@@ -387,7 +387,7 @@ export default function App() {
           `);
         });
 
-        // Add GPS user location if available
+        // Marcador de ubicación GPS del usuario
         if (userLocation) {
           L.marker([userLocation.lat, userLocation.lng])
             .addTo(map)
@@ -507,7 +507,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col font-sans">
-      {/* Top Header */}
+      {/* Encabezado Principal */}
       <header className="bg-slate-800/90 border-b border-slate-700/80 sticky top-0 z-30 backdrop-blur-md px-4 py-3">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -520,7 +520,7 @@ export default function App() {
             </div>
           </div>
 
-          {/* Admin status & Actions */}
+          {/* Acciones y estado de Administración */}
           <div className="flex items-center gap-3">
             {isAdmin && (
               <button
@@ -556,7 +556,7 @@ export default function App() {
         </div>
       </header>
 
-      {/* Top Summary Stats Bar */}
+      {/* Barra de Métricas y Estadísticas Resumidas */}
       <section className="bg-slate-800/50 border-b border-slate-700/60 py-2.5 px-4 overflow-x-auto">
         <div className="max-w-7xl mx-auto flex items-center justify-between min-w-[700px] gap-2 text-xs">
           <div className="flex items-center gap-4 bg-slate-900/60 px-3 py-1.5 rounded-lg border border-slate-700/50">
@@ -587,7 +587,7 @@ export default function App() {
         </div>
       </section>
 
-      {/* Navigation Tabs */}
+      {/* Menú de Pestañas de Navegación */}
       <nav className="bg-slate-800 border-b border-slate-700 px-4">
         <div className="max-w-7xl mx-auto flex items-center gap-2 overflow-x-auto">
           {[
@@ -617,10 +617,10 @@ export default function App() {
         </div>
       </nav>
 
-      {/* Main Content Area */}
+      {/* Área Principal de Contenidos */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 space-y-6">
         
-        {/* TAB 1: INTERACTIVE MAP */}
+        {/* PESTAÑA 1: MAPA INTERACTIVO Y DIBUJO DE ZONAS */}
         {activeTab === 'mapa' && (
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-800 p-4 rounded-xl border border-slate-700">
@@ -680,7 +680,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* Drawing Mode Instruction Banner */}
+            {/* Banner Flotante de Instrucciones para Modo Dibujo */}
             {isDrawingSector && (
               <div className="p-3 bg-amber-500/20 border border-amber-500/50 rounded-xl text-amber-300 text-xs flex items-center justify-between gap-2 shadow-lg animate-pulse">
                 <div className="flex items-center gap-2">
@@ -704,7 +704,7 @@ export default function App() {
               </div>
             )}
 
-            {/* Leaflet Canvas Container */}
+            {/* Contenedor Canvas para Leaflet */}
             <div className="bg-slate-800 rounded-xl p-2 border border-slate-700 shadow-xl relative min-h-[520px]">
               {!leafletLoaded && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 gap-2 bg-slate-800/90 rounded-lg z-20">
@@ -714,7 +714,7 @@ export default function App() {
               )}
               <div id="leaflet-map-canvas" className="w-full h-[520px] min-h-[520px] rounded-lg z-0 relative block bg-slate-900"></div>
 
-              {/* Map Legend */}
+              {/* Leyenda Visual del Mapa */}
               <div className="absolute bottom-4 right-4 bg-slate-900/90 border border-slate-700 backdrop-blur-md p-3 rounded-lg text-xs space-y-1.5 z-10 shadow-lg">
                 <p className="font-bold text-slate-300 text-[11px] border-b border-slate-800 pb-1 mb-1">Leyenda de Zonas</p>
                 <div className="flex items-center gap-2 text-slate-300"><span className="w-3 h-3 rounded bg-emerald-500"></span> Verde: Zona Limpia</div>
@@ -726,7 +726,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 2: SECTORS & GRIDS MANAGEMENT */}
+        {/* PESTAÑA 2: GESTIÓN DE SECTORES Y CUADRÍCULAS */}
         {activeTab === 'zonas' && (
           <div className="space-y-4">
             <div className="flex items-center justify-between bg-slate-800 p-4 rounded-xl border border-slate-700">
@@ -762,7 +762,6 @@ export default function App() {
                 return (
                   <div key={sec.id} className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden shadow-md flex flex-col justify-between">
                     <div>
-                      {/* Card Header Status Indicator */}
                       <div className={`p-3 ${info.bg} flex items-center justify-between text-white`}>
                         <span className="font-bold text-sm drop-shadow">{sec.name}</span>
                         <div className="flex items-center gap-1.5">
@@ -813,7 +812,6 @@ export default function App() {
                       </div>
                     </div>
 
-                    {/* Status Update Controls */}
                     <div className="p-3 bg-slate-800/80 border-t border-slate-700/80 space-y-2">
                       <p className="text-[11px] text-slate-400 font-semibold">Actualizar Estado:</p>
                       <div className="grid grid-cols-2 gap-1.5 text-[11px]">
@@ -875,7 +873,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 3: GROUPS & TEAMS */}
+        {/* PESTAÑA 3: GRUPOS Y EQUIPOS */}
         {activeTab === 'grupos' && (
           <div className="space-y-4">
             <div className="flex items-center justify-between bg-slate-800 p-4 rounded-xl border border-slate-700">
@@ -988,7 +986,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 4: VOLUNTEERS DIRECTORY */}
+        {/* PESTAÑA 4: DIRECTORIO DE VOLUNTARIOS */}
         {activeTab === 'voluntarios' && (
           <div className="space-y-4">
             <div className="flex items-center justify-between bg-slate-800 p-4 rounded-xl border border-slate-700">
@@ -1098,7 +1096,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 5: PHOTO GALLERY & ANIMAL LOG */}
+        {/* PESTAÑA 5: GALERÍA FOTOGRÁFICA Y REGISTRO DE ANIMALES */}
         {activeTab === 'galeria' && (
           <div className="space-y-4">
             <div className="flex items-center justify-between bg-slate-800 p-4 rounded-xl border border-slate-700">
@@ -1132,7 +1130,6 @@ export default function App() {
                 return (
                   <div key={anim.id} className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden shadow-md flex flex-col justify-between">
                     <div>
-                      {/* Photo Header */}
                       <div className="relative h-48 bg-slate-900 overflow-hidden">
                         {anim.photoUrl ? (
                           <img src={anim.photoUrl} alt={anim.name} className="w-full h-full object-cover" />
@@ -1188,7 +1185,6 @@ export default function App() {
                       </div>
                     </div>
 
-                    {/* Quick Status Change */}
                     <div className="p-3 bg-slate-800/80 border-t border-slate-700/80 flex items-center justify-between gap-1 text-[11px]">
                       <span className="text-slate-400 font-semibold">Cambiar:</span>
                       {['Capturado', 'Buscando', 'Libre en la zona', 'Fallecido en la zona'].map(st => (
@@ -1216,7 +1212,7 @@ export default function App() {
 
       </main>
 
-      {/* MODAL: ADMIN LOGIN */}
+      {/* MODAL: LOGIN DE ADMINISTRADOR */}
       {showLoginModal && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-800 border border-slate-700 rounded-xl max-w-sm w-full p-5 space-y-4 shadow-2xl">
@@ -1274,7 +1270,7 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL: REPORT / EDIT ANIMAL */}
+      {/* MODAL: REPORTAR O EDITAR ANIMAL */}
       {showReportModal && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-800 border border-slate-700 rounded-xl max-w-md w-full p-5 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
@@ -1387,7 +1383,7 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL: CREATE / EDIT VOLUNTEER */}
+      {/* MODAL: CREAR O EDITAR VOLUNTARIO */}
       {showVolunteerModal && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-800 border border-slate-700 rounded-xl max-w-md w-full p-5 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
@@ -1475,7 +1471,7 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL: CREATE / EDIT GROUP */}
+      {/* MODAL: CREAR O EDITAR GRUPO */}
       {showGroupModal && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-800 border border-slate-700 rounded-xl max-w-md w-full p-5 space-y-4 shadow-2xl">
@@ -1556,7 +1552,7 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL: CREATE / EDIT SECTOR */}
+      {/* MODAL: CREAR O EDITAR SECTOR/CUADRÍCULA (SOPORTA COORDENADAS PRELLENADAS DESDE EL MAPA) */}
       {showSectorModal && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-800 border border-slate-700 rounded-xl max-w-md w-full p-5 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
@@ -1647,7 +1643,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Footer */}
+      {/* Pie de página */}
       <footer className="bg-slate-900 border-t border-slate-800 p-4 text-center text-xs text-slate-500">
         Rescate Animal La Guaira &copy; 2026. Plataforma de coordinación para rescatistas y brigadas comunitarias.
       </footer>
