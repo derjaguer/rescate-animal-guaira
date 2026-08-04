@@ -3,19 +3,8 @@ import {
   Plus, Users, Map as MapIcon, Image as ImageIcon, CheckCircle, AlertTriangle, 
   Shield, MapPin, X, Navigation, UserPlus, Phone, Heart, Search, ShieldAlert, 
   CheckCircle2, AlertOctagon, HelpCircle, Eye, Compass, Layers, Edit3, Trash2, 
-  Camera, Lock, LogIn, LogOut, Check, AlertCircle
+  Camera, Lock, LogIn, LogOut, Check, AlertCircle, Mail, AtSign, Globe, RefreshCw
 } from 'lucide-react';
-
-// Credenciales por defecto para "rescate-animal-guaira"
-const DEFAULT_FIREBASE_CONFIG = {
-  apiKey: "AIzaSyBhA87FvcrpLbmRSbWOHz8QqT7lk_Vcz_o",
-  authDomain: "rescate-animal-guaira.firebaseapp.com",
-  projectId: "rescate-animal-guaira",
-  storageBucket: "rescate-animal-guaira.firebasestorage.app",
-  messagingSenderId: "1038458912009",
-  appId: "1:1038458912009:web:6cef5f2cb769ad394067d8",
-  measurementId: "G-CKYT5N8CX7"
-};
 
 const PRESET_LA_GUAIRA_SECTORS = [
   { id: 'catia_la_mar', name: 'Cuadrícula A1 - Catia La Mar', swLat: 10.575, swLng: -67.050, neLat: 10.610, neLng: -67.000 },
@@ -59,17 +48,17 @@ const getAnimalStatusBadge = (status) => {
   }
 };
 
+const INITIAL_VOLUNTEERS = [
+  { id: 'vol-1', name: 'Dr. Carlos Mendoza', role: 'Veterinario Principal', phone: '+58 412-5551234', email: 'carlos.mendoza@gmail.com', photoUrl: 'https://images.unsplash.com/photo-1537368910025-700350fe46c7?w=150', social: '@drcarlosmendoza', groupId: 'grp-1', sectorId: 'macuto' },
+  { id: 'vol-2', name: 'Sofía Guerrero', role: 'Rescatista de Campo', phone: '+58 412-1112233', email: 'sofia.rescatista@gmail.com', photoUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150', social: '@sofi_rescatista', groupId: 'grp-1', sectorId: 'macuto' },
+  { id: 'vol-3', name: 'Elena Ramos', role: 'Coordinadora Felinos', phone: '+58 414-9988776', email: 'elena.ramos@hotmail.com', photoUrl: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150', social: '@elenaramos_felinos', groupId: 'grp-2', sectorId: 'maiquetia' },
+  { id: 'vol-4', name: 'Marcos Silva', role: 'Logística y Transporte', phone: '+58 416-3332211', email: 'marcos.silva@gmail.com', photoUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150', social: '@marcos_logistica', groupId: 'grp-3', sectorId: 'catia_la_mar' }
+];
+
 const INITIAL_GROUPS = [
   { id: 'grp-1', name: 'Equipo Canino Macuto', leader: 'Dr. Carlos Mendoza', phone: '+58 412-5551234', color: '#3b82f6' },
   { id: 'grp-2', name: 'Brigada Felina Maiquetía', leader: 'Elena Ramos', phone: '+58 414-9988776', color: '#8b5cf6' },
   { id: 'grp-3', name: 'Rescate de Emergencia Catia La Mar', leader: 'Marcos Silva', phone: '+58 416-3332211', color: '#ec4899' }
-];
-
-const INITIAL_VOLUNTEERS = [
-  { id: 'vol-1', name: 'Dr. Carlos Mendoza', role: 'Veterinario Principal', phone: '+58 412-5551234', groupId: 'grp-1', sectorId: 'macuto' },
-  { id: 'vol-2', name: 'Sofía Guerrero', role: 'Rescatista de Campo', phone: '+58 412-1112233', groupId: 'grp-1', sectorId: 'macuto' },
-  { id: 'vol-3', name: 'Elena Ramos', role: 'Coordinadora Felinos', phone: '+58 414-9988776', groupId: 'grp-2', sectorId: 'maiquetia' },
-  { id: 'vol-4', name: 'Marcos Silva', role: 'Logística y Transporte', phone: '+58 416-3332211', groupId: 'grp-3', sectorId: 'catia_la_mar' }
 ];
 
 const INITIAL_SECTORS = PRESET_LA_GUAIRA_SECTORS.map((s, idx) => ({
@@ -125,19 +114,57 @@ const INITIAL_ANIMALS = [
 ];
 
 export default function App() {
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(() => {
+    return localStorage.getItem('rag_isAdmin') === 'true';
+  });
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [loginUsername, setLoginUsername] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
 
-  const [activeTab, setActiveTab] = useState('mapa'); // 'mapa', 'zonas', 'grupos', 'voluntarios', 'galeria'
-  
-  // Data States
-  const [sectors, setSectors] = useState(INITIAL_SECTORS);
-  const [groups, setGroups] = useState(INITIAL_GROUPS);
-  const [volunteers, setVolunteers] = useState(INITIAL_VOLUNTEERS);
-  const [animals, setAnimals] = useState(INITIAL_ANIMALS);
+  const [activeTab, setActiveTab] = useState('mapa');
+
+  // Persistence via LocalStorage
+  const [volunteers, setVolunteers] = useState(() => {
+    const saved = localStorage.getItem('rag_volunteers');
+    return saved ? JSON.parse(saved) : INITIAL_VOLUNTEERS;
+  });
+
+  const [groups, setGroups] = useState(() => {
+    const saved = localStorage.getItem('rag_groups');
+    return saved ? JSON.parse(saved) : INITIAL_GROUPS;
+  });
+
+  const [sectors, setSectors] = useState(() => {
+    const saved = localStorage.getItem('rag_sectors');
+    return saved ? JSON.parse(saved) : INITIAL_SECTORS;
+  });
+
+  const [animals, setAnimals] = useState(() => {
+    const saved = localStorage.getItem('rag_animals');
+    return saved ? JSON.parse(saved) : INITIAL_ANIMALS;
+  });
+
+  // Sync to localStorage
+  useEffect(() => {
+    localStorage.setItem('rag_volunteers', JSON.stringify(volunteers));
+  }, [volunteers]);
+
+  useEffect(() => {
+    localStorage.setItem('rag_groups', JSON.stringify(groups));
+  }, [groups]);
+
+  useEffect(() => {
+    localStorage.setItem('rag_sectors', JSON.stringify(sectors));
+  }, [sectors]);
+
+  useEffect(() => {
+    localStorage.setItem('rag_animals', JSON.stringify(animals));
+  }, [animals]);
+
+  useEffect(() => {
+    localStorage.setItem('rag_isAdmin', isAdmin ? 'true' : 'false');
+  }, [isAdmin]);
 
   // Modals & Edit States
   const [showReportModal, setShowReportModal] = useState(false);
@@ -153,8 +180,8 @@ export default function App() {
   const [editingSector, setEditingSector] = useState(null);
 
   const [selectedSectorForReport, setSelectedSectorForReport] = useState(null);
-  
-  // Leaflet map reference & script status
+
+  // Leaflet map state
   const mapInstanceRef = useRef(null);
   const [leafletLoaded, setLeafletLoaded] = useState(false);
   const [userLocation, setUserLocation] = useState(null);
@@ -284,7 +311,6 @@ export default function App() {
 
   const handleAdminLogin = (e) => {
     e.preventDefault();
-    // Requisito de login seguro de admin
     if (loginUsername === 'derjaguer' && loginPassword === '.2411Patty..') {
       setIsAdmin(true);
       setShowLoginModal(false);
@@ -298,6 +324,19 @@ export default function App() {
 
   const handleAdminLogout = () => {
     setIsAdmin(false);
+  };
+
+  const handleResetData = () => {
+    if (confirm("¿Estás seguro de reiniciar todos los datos a la configuración inicial por defecto?")) {
+      localStorage.removeItem('rag_volunteers');
+      localStorage.removeItem('rag_groups');
+      localStorage.removeItem('rag_sectors');
+      localStorage.removeItem('rag_animals');
+      setVolunteers(INITIAL_VOLUNTEERS);
+      setGroups(INITIAL_GROUPS);
+      setSectors(INITIAL_SECTORS);
+      setAnimals(INITIAL_ANIMALS);
+    }
   };
 
   const handleGetLocation = () => {
@@ -378,8 +417,18 @@ export default function App() {
             </div>
           </div>
 
-          {/* Admin status & Login toggle */}
+          {/* Admin status & Actions */}
           <div className="flex items-center gap-3">
+            {isAdmin && (
+              <button
+                onClick={handleResetData}
+                title="Restablecer datos de fábrica"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 border border-slate-600 text-slate-300 rounded-lg text-xs font-semibold transition-all"
+              >
+                <RefreshCw className="w-3.5 h-3.5 text-amber-400" /> Reiniciar Datos
+              </button>
+            )}
+
             {isAdmin ? (
               <div className="flex items-center gap-2">
                 <span className="px-3 py-1 bg-amber-500/20 border border-amber-500/50 rounded-lg text-xs font-semibold text-amber-300 flex items-center gap-1.5">
@@ -759,9 +808,18 @@ export default function App() {
                       <div className="space-y-1.5">
                         {groupVolunteers.map(v => (
                           <div key={v.id} className="text-xs bg-slate-900/60 p-2 rounded border border-slate-700/50 flex items-center justify-between">
-                            <div>
-                              <strong className="text-slate-200">{v.name}</strong>
-                              <span className="text-slate-400 text-[11px] block">{v.role}</span>
+                            <div className="flex items-center gap-2">
+                              {v.photoUrl ? (
+                                <img src={v.photoUrl} alt={v.name} className="w-7 h-7 rounded-full object-cover border border-slate-600" />
+                              ) : (
+                                <div className="w-7 h-7 rounded-full bg-slate-700 flex items-center justify-center text-slate-400 font-bold text-[10px]">
+                                  {v.name.charAt(0)}
+                                </div>
+                              )}
+                              <div>
+                                <strong className="text-slate-200">{v.name}</strong>
+                                <span className="text-slate-400 text-[11px] block">{v.role}</span>
+                              </div>
                             </div>
                             <a href={`tel:${v.phone}`} className="text-emerald-400 hover:underline text-[11px]">
                               {v.phone}
@@ -808,9 +866,10 @@ export default function App() {
                 <table className="w-full text-left text-xs text-slate-300">
                   <thead className="bg-slate-900/80 uppercase text-[10px] text-slate-400 font-bold border-b border-slate-700">
                     <tr>
-                      <th className="p-3.5">Nombre del Voluntario</th>
+                      <th className="p-3.5">Voluntario</th>
                       <th className="p-3.5">Rol / Especialidad</th>
-                      <th className="p-3.5">Teléfono</th>
+                      <th className="p-3.5">Contacto</th>
+                      <th className="p-3.5">Redes Sociales</th>
                       <th className="p-3.5">Grupo Asignado</th>
                       {isAdmin && <th className="p-3.5 text-right">Acciones Admin</th>}
                     </tr>
@@ -820,12 +879,33 @@ export default function App() {
                       const grp = groups.find(g => g.id === vol.groupId);
                       return (
                         <tr key={vol.id} className="hover:bg-slate-700/30 transition-all">
-                          <td className="p-3.5 font-bold text-white">{vol.name}</td>
+                          <td className="p-3.5 font-bold text-white flex items-center gap-2.5">
+                            {vol.photoUrl ? (
+                              <img src={vol.photoUrl} alt={vol.name} className="w-8 h-8 rounded-full object-cover border border-slate-600" />
+                            ) : (
+                              <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-slate-300 font-bold">
+                                {vol.name.charAt(0)}
+                              </div>
+                            )}
+                            <div>
+                              <span>{vol.name}</span>
+                              {vol.email && <span className="block text-[10px] text-slate-400 font-normal">{vol.email}</span>}
+                            </div>
+                          </td>
                           <td className="p-3.5 text-slate-300">{vol.role}</td>
                           <td className="p-3.5 font-mono text-emerald-400">
                             <a href={`tel:${vol.phone}`} className="hover:underline flex items-center gap-1">
                               <Phone className="w-3 h-3" /> {vol.phone}
                             </a>
+                          </td>
+                          <td className="p-3.5 text-slate-400">
+                            {vol.social ? (
+                              <span className="flex items-center gap-1 text-blue-400 font-medium">
+                                <AtSign className="w-3 h-3" /> {vol.social}
+                              </span>
+                            ) : (
+                              <span className="text-slate-600 italic">No registrada</span>
+                            )}
                           </td>
                           <td className="p-3.5">
                             <span className="bg-slate-700 text-amber-300 px-2 py-1 rounded text-[11px] font-semibold border border-slate-600">
@@ -1157,7 +1237,7 @@ export default function App() {
       {/* MODAL: CREATE / EDIT VOLUNTEER */}
       {showVolunteerModal && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-800 border border-slate-700 rounded-xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+          <div className="bg-slate-800 border border-slate-700 rounded-xl max-w-md w-full p-5 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-700 pb-3">
               <h3 className="font-bold text-white text-base flex items-center gap-2">
                 <UserPlus className="w-5 h-5 text-amber-400" /> {editingVolunteer ? 'Editar Voluntario' : 'Registrar Nuevo Voluntario'}
@@ -1175,6 +1255,9 @@ export default function App() {
                 name: fd.get('name'),
                 role: fd.get('role'),
                 phone: fd.get('phone'),
+                email: fd.get('email'),
+                photoUrl: fd.get('photoUrl'),
+                social: fd.get('social'),
                 groupId: fd.get('groupId')
               };
 
@@ -1195,9 +1278,25 @@ export default function App() {
                 <input required name="role" defaultValue={editingVolunteer?.role || ''} placeholder="Ej. Veterinario, Capturista, Conductor" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
               </div>
 
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-slate-300 mb-1 font-semibold">Teléfono</label>
+                  <input required name="phone" defaultValue={editingVolunteer?.phone || ''} placeholder="+58 412 0000000" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
+                </div>
+                <div>
+                  <label className="block text-slate-300 mb-1 font-semibold">Correo Electrónico</label>
+                  <input type="email" name="email" defaultValue={editingVolunteer?.email || ''} placeholder="ejemplo@correo.com" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
+                </div>
+              </div>
+
               <div>
-                <label className="block text-slate-300 mb-1 font-semibold">Teléfono de Contacto</label>
-                <input required name="phone" defaultValue={editingVolunteer?.phone || ''} placeholder="+58 412 0000000" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
+                <label className="block text-slate-300 mb-1 font-semibold">URL Foto de Perfil (Opcional)</label>
+                <input name="photoUrl" defaultValue={editingVolunteer?.photoUrl || ''} placeholder="https://..." className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
+              </div>
+
+              <div>
+                <label className="block text-slate-300 mb-1 font-semibold">Red Social / Usuario (Instagram, X, Facebook)</label>
+                <input name="social" defaultValue={editingVolunteer?.social || ''} placeholder="@usuario_rescatista" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
               </div>
 
               <div>
@@ -1239,11 +1338,14 @@ export default function App() {
             <form onSubmit={(e) => {
               e.preventDefault();
               const fd = new FormData(e.target);
+              const leaderVolId = fd.get('leaderVolId');
+              const volObj = volunteers.find(v => v.id === leaderVolId);
+              
               const grpData = {
                 id: editingGroup ? editingGroup.id : ('grp-' + Date.now()),
                 name: fd.get('name'),
-                leader: fd.get('leader'),
-                phone: fd.get('phone'),
+                leader: volObj ? volObj.name : (fd.get('customLeader') || 'Sin Líder'),
+                phone: volObj ? volObj.phone : (fd.get('customPhone') || 'Sin Teléfono'),
                 color: fd.get('color') || '#3b82f6'
               };
 
@@ -1260,13 +1362,27 @@ export default function App() {
               </div>
 
               <div>
-                <label className="block text-slate-300 mb-1 font-semibold">Líder / Coordinador</label>
-                <input required name="leader" defaultValue={editingGroup?.leader || ''} placeholder="Nombre del líder" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
+                <label className="block text-slate-300 mb-1 font-semibold">Seleccionar Líder de los Voluntarios Registrados</label>
+                <select 
+                  name="leaderVolId" 
+                  defaultValue={volunteers.find(v => v.name === editingGroup?.leader)?.id || ''}
+                  className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white"
+                >
+                  <option value="">-- Seleccionar Voluntario Existente --</option>
+                  {volunteers.map(v => (
+                    <option key={v.id} value={v.id}>{v.name} ({v.role}) - {v.phone}</option>
+                  ))}
+                </select>
               </div>
 
               <div>
-                <label className="block text-slate-300 mb-1 font-semibold">Teléfono del Líder</label>
-                <input required name="phone" defaultValue={editingGroup?.phone || ''} placeholder="+58 414 0000000" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
+                <label className="block text-slate-300 mb-1 font-semibold">O Escribir Líder / Coordinador Manualmente</label>
+                <input name="customLeader" defaultValue={editingGroup?.leader || ''} placeholder="Nombre del líder si no está en la lista" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
+              </div>
+
+              <div>
+                <label className="block text-slate-300 mb-1 font-semibold">Teléfono del Líder (Manual)</label>
+                <input name="customPhone" defaultValue={editingGroup?.phone || ''} placeholder="+58 414 0000000" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white" />
               </div>
 
               <div>
