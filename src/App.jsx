@@ -187,8 +187,16 @@ export default function App() {
   const [userLocation, setUserLocation] = useState(null);
   const [isLocating, setIsLocating] = useState(false);
 
-  // Inject Leaflet CSS & JS dynamically
+  // Inject Leaflet CSS & JS dynamically with polling fallback
   useEffect(() => {
+    const checkL = () => {
+      if (window.L) {
+        setLeafletLoaded(true);
+      } else {
+        setTimeout(checkL, 200);
+      }
+    };
+
     if (window.L) {
       setLeafletLoaded(true);
       return;
@@ -213,34 +221,64 @@ export default function App() {
     } else {
       existingJs.addEventListener('load', () => setLeafletLoaded(true));
     }
+
+    checkL();
   }, []);
 
   // Initialize and update Leaflet Map
   useEffect(() => {
     if (!leafletLoaded || activeTab !== 'mapa') return;
 
+    let map = null;
+
     const timer = setTimeout(() => {
       const container = document.getElementById('leaflet-map-canvas');
       if (!container || !window.L) return;
 
+      // Reset leaflet internal container ID if re-mounting
+      if (container._leaflet_id) {
+        container._leaflet_id = null;
+      }
+
       if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
+        try {
+          mapInstanceRef.current.remove();
+        } catch (e) {
+          console.warn("Leaflet cleanup warning:", e);
+        }
         mapInstanceRef.current = null;
       }
 
       try {
         const L = window.L;
-        const map = L.map('leaflet-map-canvas').setView([10.595, -66.930], 12);
+        map = L.map('leaflet-map-canvas', {
+          center: [10.595, -66.930],
+          zoom: 12,
+          zoomControl: true
+        });
         mapInstanceRef.current = map;
 
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
           attribution: '&copy; OpenStreetMap | Rescate La Guaira'
         }).addTo(map);
+
+        // Force resize calculation after DOM layout
+        setTimeout(() => {
+          if (map) {
+            map.invalidateSize();
+          }
+        }, 200);
 
         // Render sectors
         sectors.forEach((sec) => {
           const info = getSectorStatusInfo(sec.status);
-          const bounds = [[sec.swLat, sec.swLng], [sec.neLat, sec.neLng]];
+          const swLat = parseFloat(sec.swLat) || 10.600;
+          const swLng = parseFloat(sec.swLng) || -66.900;
+          const neLat = parseFloat(sec.neLat) || 10.620;
+          const neLng = parseFloat(sec.neLng) || -66.850;
+
+          const bounds = [[swLat, swLng], [neLat, neLng]];
 
           const rect = L.rectangle(bounds, {
             color: info.hex,
@@ -267,7 +305,10 @@ export default function App() {
 
         // Render animal pins
         animals.forEach((anim) => {
-          const marker = L.circleMarker([anim.lat, anim.lng], {
+          const lat = parseFloat(anim.lat) || 10.600;
+          const lng = parseFloat(anim.lng) || -66.900;
+
+          const marker = L.circleMarker([lat, lng], {
             radius: 8,
             fillColor: anim.status === 'Capturado' ? '#10b981' : anim.status === 'Buscando' ? '#f59e0b' : '#3b82f6',
             color: '#ffffff',
@@ -298,12 +339,14 @@ export default function App() {
       } catch (err) {
         console.error("Error al renderizar el mapa:", err);
       }
-    }, 100);
+    }, 150);
 
     return () => {
       clearTimeout(timer);
       if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
+        try {
+          mapInstanceRef.current.remove();
+        } catch (e) {}
         mapInstanceRef.current = null;
       }
     };
@@ -561,7 +604,7 @@ export default function App() {
                   <span className="text-xs">Cargando mapa interactivo GPS...</span>
                 </div>
               )}
-              <div id="leaflet-map-canvas" className="w-full h-[520px] rounded-lg z-0"></div>
+              <div id="leaflet-map-canvas" className="w-full h-[520px] min-h-[520px] rounded-lg z-0 relative block bg-slate-900"></div>
 
               {/* Map Legend */}
               <div className="absolute bottom-4 right-4 bg-slate-900/90 border border-slate-700 backdrop-blur-md p-3 rounded-lg text-xs space-y-1.5 z-10 shadow-lg">
